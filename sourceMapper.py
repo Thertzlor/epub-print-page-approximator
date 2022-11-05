@@ -1,16 +1,31 @@
 import math
 import re
+import zipfile
 
 from ebooklib import epub
-from html2text import html2text
 
 xns = {'x':'*'}
 
 matcher = lambda word : r' ('+re.escape(word)+r')[.,! ?&*\n]'
 """match a word in a way that is  very unlikely to occur within a html tag"""
 
-spanner = lambda num : f'<span class="pg_break" id="pg_break_{num}"/>'
+spanner = lambda num : f'<span class="pg_break" id="{pageIdPattern(num)}"/>'
 """generate a span element used to designate a page break"""
+
+def pageIdPattern(num:int,prefix = 'pg_break_'):
+  return f'{prefix}{num}'
+
+
+def overzip(src:str,dest:str,repDict:dict={}):
+  with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=inZip.compression,compresslevel=inZip.compresslevel) as outZip:
+      # Iterate the input files
+      for inzipinfo in inZip.infolist():
+          # Read input file
+          with inZip.open(inzipinfo) as infile:
+              if inzipinfo.filename in repDict:
+                  outZip.writestr(inzipinfo.filename, repDict[inzipinfo.filename].encode('utf-8'))
+              else: outZip.writestr(inzipinfo.filename, infile.read()) # Other file, dont want to modify => just copy it
+      
 
 def safeWord(match:str,stripStr:str,fullStr:str):
   """function for finding 'safe' word matches for inserting page breaks"""
@@ -97,9 +112,8 @@ def between (str,pos,around,sep='|'):
 
 def insertAt(value,targetString,index): return targetString[:index] + value + targetString[index:]
 
-def reintegrate(pageLocations:list[int],pageMap:list[int],docOffsets:list[int],documents:list[epub.EpubHtml],startNo = 0):
+def reintegrate(pageLocations:list[int],pageMap:list[int],docOffsets:list[int],documents:list[epub.EpubHtml],startNo = 0,repDict:dict={}):
   perDoc = [[y[1] - docOffsets[x[0]] for y in enumerate(pageLocations) if x[0] == pageMap[y[0]]] for x in enumerate(documents)]
-  print(perDoc)
   for [i,locList] in enumerate(perDoc):
     if len(locList) == 0: continue
     doc = documents[i]
@@ -108,36 +122,64 @@ def reintegrate(pageLocations:list[int],pageMap:list[int],docOffsets:list[int],d
       if loc == 0: continue
       docText = insertAt(spanner(startNo),docText,loc)
       startNo = startNo + 1
-    doc.set_content(docText.encode('utf-8'))
+    repDict[doc.file_name,docText]
+
+def addToNcx(ncx:epub.EpubItem,docMap:list[int],documents:list[epub.EpubHtml],startNo=0,repDict:dict={}):
+  doc:epub.etree.ElementBase = epub.etree.fromstring(ncx.get_content())
+  def tag(name:str,attributes:dict=None)->epub.etree.ElementBase: return doc.makeelement(name,attributes)
+  def makeLabel(text:str|int):
+    label = tag('navLabel')
+    txt = tag('text')
+    txt.text = str(text);
+    label.append(txt)
+    return label
+  getLink = lambda pageNo : f'{documents[docMap[pageNo]].file_name}#{pageIdPattern(startNo+pageNo)}'
+  def makeTarget(number:int,customLink:str=None):
+    target = tag('pageTarget',{'id':f'pageNav_{startNo+number}', 'type':'normal', 'value':str(number)})
+    target.append(makeLabel(number))
+    target.append(tag('content',{'src':customLink or getLink(number-1)}))
+    return target
+  pList:epub.etree.ElementBase = doc.find('x:pageList',xns)
+  if(pList is not None): 
+    put = input('epub already has a pageList! Continue and overwrite it? [y/N]')
+    if put.lower() != 'y': return False
+    doc.remove(pList)
+  genList = tag('pageList')
+  genList.append(makeLabel('Pages'))
+  for i in range(len(docMap)): genList.append(makeTarget(i+1, i==0 and documents[0].file_name or None))
+  doc.append(genList)
+  repDict[ncx.file_name,epub.etree.tostring(doc).decode('utf-8')]
+  return True
+
+def numberOfNavPoints(ncx:epub.EpubItem|None):
+  if ncx is None: return 0
+  doc:epub.etree.ElementBase = epub.etree.fromstring(ncx.get_content())
+  navMap:epub.etree.ElementBase = doc.find('x:navMap',xns)
+  if navMap is None: return 0
+  return len(navMap.findall('x:navPoint',xns))
 
 def pubMain(path:str):
   pub = epub.read_epub(path)
+  # overzip(path,f'{path[:-5]}_oops.epub')
   # getting all documents that are not the internal EPUB3 navigation
-  # print(docMapper([0,10,20])(10))
   docs:list[epub.EpubHtml] = [x for x in pub.get_items_of_type(epub.ebooklib.ITEM_DOCUMENT) if not isNav(x)]
   [fullText,strippedText,splits] = unifyDoc(docs)
   [realPages,_,realCount,rawCount] = mainPaginate(fullText,strippedText,100)
   pageMap = [ next(y[0]-1 for y in enumerate(splits) if y[1] > x) for x in realPages]
   if(realCount != rawCount): print("WARNING! Page counts don't make sense")
-  reintegrate(realPages,pageMap,splits,docs)
-  # print([splits,realPages,pageMap])
-  # for nav in pub.get_items_of_type(epub.ebooklib.ITEM_NAVIGATION):
-  #   navi:epub.EpubItem = nav
-  #   doc:epub.etree.ElementBase = epub.etree.fromstring(navi.get_content())
-  #   pList:epub.etree.ElementBase = doc.find('x:pageList',xns)
-  #   if(pList is not None): 
-  #     print('epub already has a pageList!')
-  #     newel = pList.makeelement('pageTarget',{'id':'nopero','fungus':'elephant'})
-  #     pList.append(newel)
-  #     navi.set_content(epub.etree.tostring(doc))
-  #   navPoints:list[epub.etree.ElementBase] = doc.find('x:navMap',xns).findall('x:navPoint',xns)
-  #   finalNavPoint = len(navPoints)
-  #   print(finalNavPoint)
-  #   break
-  #   # (epub.Link('xhtml\Kauf_9780399589706_epub3_c084_r1.xhtml#page_685','9989'))
-  caliTags = next(m for m in pub.metadata if 'calibre' in m)
-  # custom metadata set by calibre causes errors when saving the file, so we simply remove them from the dictionary. 
-  if caliTags: del pub.metadata[caliTags]
+  ncxNav:epub.EpubItem = next(x for x in pub.get_items_of_type(epub.ebooklib.ITEM_NAVIGATION))
+  # epub3Nav:epub.EpubHtml =  next(x for x in pub.get_items_of_type(epub.ebooklib.ITEM_DOCUMENT) if isNav(x))
+  if ncxNav is None: raise BaseException('No navigation files found in EPUB, file probably is not valid.')
+  playOrderStart = numberOfNavPoints(ncxNav)
+  repDict = {}
+  reintegrate(realPages,pageMap,splits,docs,playOrderStart,repDict)
+  addToNcx(ncxNav,pageMap,docs,playOrderStart,repDict)
+  print(repDict)
+  # caliTags = next(m for m in pub.metadata if 'calibre' in m)
+  # if caliTags:
+  #   # custom metadata set by calibre causes errors when saving the file, so we simply remove them from the dictionary. 
+  #   userTags = [k for k in pub.metadata[caliTags].keys() if 'user_metadata' in k]
+  #   for u in userTags: del pub.metadata[caliTags][u]
   # epub.write_epub(f'{path[:-5]}_paginated.epub',pub)
 
 pubMain('./The Issue at Hand - James Blish.epub')
