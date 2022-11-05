@@ -90,7 +90,7 @@ def unifyDoc(docs:list[epub.EpubHtml])-> tuple[str,str,list[int]]:
   """Extract the full text content of an ebook, one string containing the full html, one containing only the text
   and one list of locations mapping each document to a location within the main string"""
   xmlStrings:list[str] = [x.get_content().decode('utf-8') for x in docs]
-  innerStrings:list[str] = [''.join(epub.etree.fromstring(x.get_content()).itertext()) for x in docs]
+  innerStrings:list[str] = [''.join(epub.etree.fromstring(x.get_content(),epub.etree.HTMLParser()).itertext()) for x in docs]
   splits:list[int]=[0]
   currentSplit = 0
   for x in xmlStrings:
@@ -100,7 +100,7 @@ def unifyDoc(docs:list[epub.EpubHtml])-> tuple[str,str,list[int]]:
 
 def isNav(html:epub.EpubHtml):
   """detect the EPUB3 navigation html"""
-  bod = epub.etree.fromstring(html.get_content())
+  bod = epub.etree.fromstring(html.get_content(),epub.etree.HTMLParser())
   return bod.find('x:body',xns).find('x:nav',xns) is not None
 
 
@@ -122,7 +122,8 @@ def reintegrate(pageLocations:list[int],pageMap:list[int],docOffsets:list[int],d
       if loc == 0: continue
       docText = insertAt(spanner(startNo),docText,loc)
       startNo = startNo + 1
-    repDict[doc.file_name,docText]
+    doc.set_content(docText.encode('utf-8'))
+    repDict[doc.file_name] = docText
 
 def addToNcx(ncx:epub.EpubItem,docMap:list[int],documents:list[epub.EpubHtml],startNo=0,repDict:dict={}):
   doc:epub.etree.ElementBase = epub.etree.fromstring(ncx.get_content())
@@ -148,12 +149,13 @@ def addToNcx(ncx:epub.EpubItem,docMap:list[int],documents:list[epub.EpubHtml],st
   genList.append(makeLabel('Pages'))
   for i in range(len(docMap)): genList.append(makeTarget(i+1, i==0 and documents[0].file_name or None))
   doc.append(genList)
-  repDict[ncx.file_name,epub.etree.tostring(doc).decode('utf-8')]
+  ncx.set_content(epub.etree.tostring(doc))
+  repDict[ncx.file_name] = epub.etree.tostring(doc).decode('utf-8')
   return True
 
 def numberOfNavPoints(ncx:epub.EpubItem|None):
   if ncx is None: return 0
-  doc:epub.etree.ElementBase = epub.etree.fromstring(ncx.get_content())
+  doc:epub.etree.ElementBase = epub.etree.fromstring(ncx.get_content(),epub.etree.HTMLParser())
   navMap:epub.etree.ElementBase = doc.find('x:navMap',xns)
   if navMap is None: return 0
   return len(navMap.findall('x:navPoint',xns))
@@ -174,12 +176,12 @@ def pubMain(path:str):
   repDict = {}
   reintegrate(realPages,pageMap,splits,docs,playOrderStart,repDict)
   addToNcx(ncxNav,pageMap,docs,playOrderStart,repDict)
-  print(repDict)
-  # caliTags = next(m for m in pub.metadata if 'calibre' in m)
-  # if caliTags:
-  #   # custom metadata set by calibre causes errors when saving the file, so we simply remove them from the dictionary. 
-  #   userTags = [k for k in pub.metadata[caliTags].keys() if 'user_metadata' in k]
-  #   for u in userTags: del pub.metadata[caliTags][u]
-  # epub.write_epub(f'{path[:-5]}_paginated.epub',pub)
+  overzip(path,f'{path[:-5]}_paginated_zip.epub',repDict)
+  caliTags = next(m for m in pub.metadata if 'calibre' in m)
+  if caliTags:
+    # custom metadata set by calibre causes errors when saving the file, so we simply remove them from the dictionary. 
+    userTags = [k for k in pub.metadata[caliTags].keys() if 'user_metadata' in k]
+    for u in userTags: del pub.metadata[caliTags][u]
+  epub.write_epub(f'{path[:-5]}_paginated_lib.epub',pub)
 
 pubMain('./The Issue at Hand - James Blish.epub')
