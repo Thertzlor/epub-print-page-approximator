@@ -6,7 +6,10 @@ from ebooklib.epub import EpubHtml, EpubItem, etree, read_epub, zipfile
 
 xns = {'x':'*'}
 
-matcher = lambda word : r' ('+re.escape(word)+r')[.,! ?&*\n]'
+wordTerminators = '.,! ?&*\n'
+nonWordChars = '\s><="'
+
+matcher = lambda word : f' ({re.escape(word)})[{wordTerminators}]'
 """match a word in a way that is  very unlikely to occur within a html tag"""
 
 
@@ -59,7 +62,7 @@ def findWord(string:str,preferredSize:int,stripStr:str,fullStr:str):
   lastDex = 0
   while res is None:
     if preferredSize == 0: raise LookupError(f"can't find any safe words for current page: {fullStr}")
-    ex=r' (\w{'+re.escape(str(preferredSize))+r',})[.,! ?&*\n]'
+    ex=f' (\w{{{re.escape(str(preferredSize))},}})[{wordTerminators}]'
     res = re.search(ex,string[lastDex:])
     if res is not None and not safeWord(res[1],stripStr,fullStr):
       lastDex = lastDex + res.end()
