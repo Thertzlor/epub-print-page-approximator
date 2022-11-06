@@ -38,7 +38,7 @@ def printProgressBar (iteration:int, total:int, prefix = '', suffix = '', decima
 
 def overrideZip(src:str,dest:str,repDict:dict={}):
   """Zip replacer from the internet because for some reason the write method of the ebook libraray breaks HTML"""
-  with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=inZip.compression,compresslevel=inZip.compresslevel) as outZip:
+  with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=zipfile.ZIP_DEFLATED) as outZip:
     # Iterate the input files
     for inZipInfo in inZip.infolist():
       # Read input file
@@ -47,7 +47,7 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
         inDict = next((x for x in repDict.keys() if inZipInfo.filename.endswith(x)),None)
         if inDict is not None:
           outZip.writestr(inZipInfo.filename, repDict[inDict].encode('utf-8'))
-        else: outZip.writestr(inZipInfo.filename, inFile.read()) # Other file, dont want to modify => just copy it
+        else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED) # Other file, dont want to modify => just copy it
   print(f'succesfully saved {dest}')
   
 
@@ -83,6 +83,8 @@ def mapReport(a,b):
 def approximatePageLocations(content:str, stripped:str, pages = 5) -> tuple[list[int],list[int],int,int]:
   pgSize = math.ceil(len(stripped)/pages)
   print(f'Calculated approximate page size of {pgSize} characters')
+  # we assume that each HTML page is not 100 times bigger than the "raw" page text page to speed up performance
+  pgLookaround = pgSize*100
   realPageIndex = [0]
   rawPageIndex = [0]
   rawPageOffset = [0]
@@ -90,8 +92,8 @@ def approximatePageLocations(content:str, stripped:str, pages = 5) -> tuple[list
   for i in range(pages-1):
     mapReport(i+2,pages)
     pageEnd = (rawPageIndex[-1]+pgSize) - rawPageOffset[-1]
-    htPart = content[realPageIndex[-1]:]
-    rawPart = stripped[rawPageIndex[-1]:]
+    htPart = content[realPageIndex[-1]:realPageIndex[-1]+pgLookaround]
+    rawPart = stripped[rawPageIndex[-1]:rawPageIndex[-1]+pgLookaround]
     currentPage = stripped[rawPageIndex[-1]:pageEnd]
     nextPage = stripped[pageEnd:pageEnd+pgSize]
     [lastWord,currentOffset] = findWord(nextPage,3,rawPart,htPart)
