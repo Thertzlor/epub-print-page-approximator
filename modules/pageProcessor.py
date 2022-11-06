@@ -20,8 +20,19 @@ def pageIdPattern(num:int,prefix = 'pgBreak'):
   return f'{prefix}{num}'
 
 
+def printProgressBar (iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+    """https://stackoverflow.com/questions/3173320/"""
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
+
+
 def overrideZip(src:str,dest:str,repDict:dict={}):
-  """Zip replacer from StackOverflow because for some reason the write method breaks XML"""
+  """Zip replacer from the internet because for some reason the write method of the ebook libraray breaks HTML"""
   with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=inZip.compression,compresslevel=inZip.compresslevel) as outZip:
     # Iterate the input files
     for inZipInfo in inZip.infolist():
@@ -59,7 +70,7 @@ def findWord(string:str,preferredSize:int,stripStr:str,fullStr:str):
 
 def mapReport(a,b):
   """simple printout function for mapping progress"""
-  print(f'mapping page {a} of {b}')
+  printProgressBar(a,b,f'Mapping page {a} of {b}','Done',2)
   pass
 
 
@@ -211,8 +222,11 @@ def numberOfNavPoints(ncx:EpubItem|None=None):
 def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_paginated'):
   pathSplit = oldPath.split("/")
   oldFileName = pathSplit.pop()
-  if newName:suffix = ''
-  return f'{newPath or "/".join(pathSplit)}{(newName or oldFileName)[:-5]}{suffix}.epub'
+  if newName is not None:suffix = ''
+  finalName = newName or oldFileName
+  if finalName.lower().endswith('.epub'):
+    finalName = finalName[:-5]
+  return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
 def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None):
   pub = read_epub(path)
