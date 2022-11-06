@@ -19,9 +19,10 @@ def spanner (num:str, offset=0,epub3=False) :
   return f'<span{typeString}title="{num+offset}" id="{pageIdPattern(num)}"/>'
 
 
-def pageIdPattern(num:int,prefix = 'pgBreak'):
+def pageIdPattern(num:int,prefix = 'pg_break_'):
   return f'{prefix}{num}'
 
+printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc)]
 
 def printProgressBar (iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """https://stackoverflow.com/questions/3173320/"""
@@ -46,6 +47,7 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
         if inDict is not None:
           outZip.writestr(inZipInfo.filename, repDict[inDict].encode('utf-8'))
         else: outZip.writestr(inZipInfo.filename, inFile.read()) # Other file, dont want to modify => just copy it
+  print(f'succesfully saved {dest}')
   
 
 def safeWord(match:str,stripStr:str,fullStr:str):
@@ -120,7 +122,7 @@ def mergeBook(docs:list[EpubHtml])-> tuple[str,str,list[int]]:
 def isNav(html:EpubHtml):
   """detect the EPUB3 navigation html"""
   bod = etree.fromstring(html.content,etree.HTMLParser())
-  return bod.find('x:body',xns).find('x:nav',xns) is not None
+  return bod.find('x:body/nav',xns) is not None
 
 
 def between (str,pos,around,sep='|'): 
@@ -128,6 +130,7 @@ def between (str,pos,around,sep='|'):
 
   Used for debugging purposes"""
   return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
+
 
 def relPath(pathA:str,pathB:str):
   [splitA,splitB] = [x.split('/') for x in[pathA,pathB]]
@@ -140,9 +143,9 @@ def relPath(pathA:str,pathB:str):
 
 def insertAt(value,targetString,index): return targetString[:index] + value + targetString[index:]
 
-
-def insertPageBreaks(pageLocations:list[int],pageMap:list[int],docOffsets:list[int],documents:list[EpubHtml],startNo = 0,repDict:dict={},epub3=False):
+def insertPageBreaks(pageLocations:list[int],pageMap:list[int],docOffsets:list[int],documents:list[EpubHtml],repDict:dict={},epub3=False):
   perDoc = [[y[1] - docOffsets[x[0]] for y in enumerate(pageLocations) if x[0] == pageMap[y[0]]] for x in enumerate(documents)]
+  currentNo = 0
   for [i,locList] in enumerate(perDoc):
     if len(locList) == 0: continue
     doc = documents[i]
@@ -150,14 +153,14 @@ def insertPageBreaks(pageLocations:list[int],pageMap:list[int],docOffsets:list[i
     offset = 0
     for loc in locList:
       if loc == 0: continue
-      newSpan = spanner(startNo,2,epub3)
+      newSpan = spanner(currentNo,2,epub3)
       docText = insertAt(newSpan,docText,loc+offset)
-      startNo = startNo + 1
+      currentNo = currentNo + 1
       offset = offset + len(newSpan)
     repDict[doc.file_name] = docText
 
 
-def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],startNo=0,repDict:dict={}):
+def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(ncx.content)
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
   def makeLabel(text:str|int):
@@ -166,9 +169,9 @@ def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],startNo=
     txt.text = str(text);
     label.append(txt)
     return label
-  getLink = lambda pageNo : f'{relPath(ncx.file_name,documents[docMap[pageNo]].file_name)}#{pageIdPattern(startNo+pageNo-1)}'
+  getLink = lambda pageNo : f'{relPath(ncx.file_name,documents[docMap[pageNo]].file_name)}#{pageIdPattern(pageNo-1)}'
   def makeTarget(number:int,customLink:str=None):
-    target = tag('pageTarget',{'id':f'pageNav_{startNo+number}', 'type':'normal', 'value':str(number)})
+    target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(number)})
     target.append(makeLabel(number))
     target.append(tag('content',{'src':customLink or getLink(number-1)}))
     return target
@@ -186,9 +189,9 @@ def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],startNo=
   return True
 
 
-def addListToNav(nav:EpubHtml,docMap:list[int],documents:list[EpubHtml],startNo=0,repDict:dict={}):
+def addListToNav(nav:EpubHtml,docMap:list[int],documents:list[EpubHtml],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser())
-  getLink = lambda pageNo : f'{relPath(nav.file_name,documents[docMap[pageNo]].file_name)}#{pageIdPattern(startNo+pageNo-1)}'
+  getLink = lambda pageNo : f'{relPath(nav.file_name,documents[docMap[pageNo]].file_name)}#{pageIdPattern(pageNo-1)}'
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
   def makeTarget(number:int,customLink:str=None):
     target = tag('li')
@@ -215,13 +218,6 @@ def addListToNav(nav:EpubHtml,docMap:list[int],documents:list[EpubHtml],startNo=
   return True
 
 
-def numberOfNavPoints(ncx:EpubItem|None=None):
-  if ncx is None: return 0
-  doc:etree.ElementBase = etree.fromstring(ncx.content,etree.HTMLParser())
-  navMap:etree.ElementBase = doc.find('x:navMap',xns)
-  if navMap is None: return 0
-  return len(navMap.findall('x:navPoint',xns))
-
 def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_paginated'):
   pathSplit = oldPath.split("/")
   oldFileName = pathSplit.pop()
@@ -230,6 +226,7 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
   if finalName.lower().endswith('.epub'):
     finalName = finalName[:-5]
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
+
 
 def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False):
   pub = read_epub(path)
@@ -242,9 +239,11 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
   epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isNav(x)),None)
   if ncxNav is None and epub3Nav is None: raise BaseException('No navigation files found in EPUB, file probably is not valid.')
-  playOrderStart = numberOfNavPoints(ncxNav)
   repDict = {}
-  insertPageBreaks(realPages,pageMap,splits,docs,playOrderStart,repDict,epub3Nav is not None)
-  if epub3Nav and not noNav: addListToNav(epub3Nav,pageMap,docs,playOrderStart,repDict)
-  if ncxNav and not noNcX: addListToNcx(ncxNav,pageMap,docs,playOrderStart,repDict)
+  insertPageBreaks(realPages,pageMap,splits,docs,repDict,epub3Nav is not None)
+  if epub3Nav and not noNav: 
+    if addListToNav(epub3Nav,pageMap,docs,repDict) == False: return print('Pagination Cancelled')
+  if ncxNav and not noNcX: 
+   if addListToNcx(ncxNav,pageMap,docs,repDict) == False :return print('Pagination Cancelled')
+  
   overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
