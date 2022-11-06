@@ -2,7 +2,8 @@ import math
 import re
 
 from ebooklib import ITEM_DOCUMENT, ITEM_NAVIGATION
-from ebooklib.epub import EpubHtml, EpubItem, etree, read_epub, zipfile
+from ebooklib.epub import (EpubHtml, EpubItem, EpubNav, etree, read_epub,
+                           zipfile)
 
 xns = {'x':'*'}
 
@@ -42,7 +43,7 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
     for inZipInfo in inZip.infolist():
       # Read input file
       with inZip.open(inZipInfo) as inFile:
-        # Sometimes EbookLib does not include the root epub path in its filenames, so we're using endsWith.
+        # Sometimes EbookLib does not include the root epub path in its filenames, so we're using endswith.
         inDict = next((x for x in repDict.keys() if inZipInfo.filename.endswith(x)),None)
         if inDict is not None:
           outZip.writestr(inZipInfo.filename, repDict[inDict].encode('utf-8'))
@@ -118,12 +119,6 @@ def mergeBook(docs:list[EpubHtml])-> tuple[str,str,list[int]]:
     currentSplit = currentSplit + len(x)
     splits.append(currentSplit)
   return [''.join(xmlStrings),''.join(innerStrings),splits]
-
-def isNav(html:EpubHtml):
-  """detect the EPUB3 navigation html"""
-  bod = etree.fromstring(html.content,etree.HTMLParser())
-  return bod.find('x:body/nav',xns) is not None
-
 
 def between (str,pos,around,sep='|'): 
   """split a string at a certain position, highlight the split with a separator and output a range of characters to either side.
@@ -231,13 +226,13 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
 def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False):
   pub = read_epub(path)
   # getting all documents that are not the internal EPUB3 navigation
-  docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if not isNav(x)]
+  docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
   [fullText,strippedText,splits] = mergeBook(docs)
   [realPages,_,realCount,rawCount] = approximatePageLocations(fullText,strippedText,pages)
   pageMap = [ next(y[0]-1 for y in enumerate(splits) if y[1] > x) for x in realPages]
   if(realCount != rawCount): print("WARNING! Page counts don't make sense")
   ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
-  epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isNav(x)),None)
+  epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
   if ncxNav is None and epub3Nav is None: raise BaseException('No navigation files found in EPUB, file probably is not valid.')
   repDict = {}
   insertPageBreaks(realPages,pageMap,splits,docs,repDict,epub3Nav is not None)
