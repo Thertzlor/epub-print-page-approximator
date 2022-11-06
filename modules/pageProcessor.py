@@ -62,7 +62,7 @@ def findWord(string:str,preferredSize:int,stripStr:str,fullStr:str):
   lastDex = 0
   while res is None:
     if preferredSize == 0: raise LookupError(f"can't find any safe words for current page: {fullStr}")
-    ex=f' (\w{{{re.escape(str(preferredSize))},}})[{wordTerminators}]'
+    ex=f' ([^{nonWordChars}{wordTerminators}]{{{re.escape(str(preferredSize))},}})[{wordTerminators}]'
     res = re.search(ex,string[lastDex:])
     if res is not None and not safeWord(res[1],stripStr,fullStr):
       lastDex = lastDex + res.end()
