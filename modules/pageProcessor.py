@@ -231,7 +231,7 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
     finalName = finalName[:-5]
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None):
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False):
   pub = read_epub(path)
   # getting all documents that are not the internal EPUB3 navigation
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if not isNav(x)]
@@ -245,6 +245,6 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None):
   playOrderStart = numberOfNavPoints(ncxNav)
   repDict = {}
   insertPageBreaks(realPages,pageMap,splits,docs,playOrderStart,repDict,epub3Nav is not None)
-  if epub3Nav: addListToNav(epub3Nav,pageMap,docs,playOrderStart,repDict)
-  if ncxNav: addListToNcx(ncxNav,pageMap,docs,playOrderStart,repDict)
+  if epub3Nav and not noNav: addListToNav(epub3Nav,pageMap,docs,playOrderStart,repDict)
+  if ncxNav and not noNcX: addListToNcx(ncxNav,pageMap,docs,playOrderStart,repDict)
   overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
