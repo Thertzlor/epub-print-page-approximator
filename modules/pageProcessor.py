@@ -183,7 +183,7 @@ def addListToNav(nav:EpubHtml,docMap:list[int],documents:list[EpubHtml],startNo=
     target.append(link)
     return target
   body:etree.ElementBase = doc.find('x:body',xns)
-  oldNav = next(x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list')
+  oldNav = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
   if(oldNav is not None): 
     put = input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]')
     if put.lower() != 'y': return False
@@ -208,8 +208,13 @@ def numberOfNavPoints(ncx:EpubItem|None=None):
   if navMap is None: return 0
   return len(navMap.findall('x:navPoint',xns))
 
+def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_paginated'):
+  pathSplit = oldPath.split("/")
+  oldFileName = pathSplit.pop()
+  if newName:suffix = ''
+  return f'{newPath or "/".join(pathSplit)}{(newName or oldFileName)[:-5]}{suffix}.epub'
 
-def processEPUB(path:str,pages:int):
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None):
   pub = read_epub(path)
   # getting all documents that are not the internal EPUB3 navigation
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if not isNav(x)]
@@ -225,6 +230,4 @@ def processEPUB(path:str,pages:int):
   insertPageBreaks(realPages,pageMap,splits,docs,playOrderStart,repDict,epub3Nav is not None)
   if epub3Nav: addListToNav(epub3Nav,pageMap,docs,playOrderStart,repDict)
   if ncxNav: addListToNcx(ncxNav,pageMap,docs,playOrderStart,repDict)
-  overrideZip(path,f'{path[:-5]}_paginated.epub',repDict)
-
-processEPUB('./The Issue at Hand - James Blish_e3.epub',413)
+  overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)

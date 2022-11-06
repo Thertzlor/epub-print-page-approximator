@@ -1,3 +1,4 @@
 *.epub
 .vscode
 *.exe
+**/__pycache__
