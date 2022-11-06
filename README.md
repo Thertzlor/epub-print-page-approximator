@@ -14,6 +14,9 @@ py .\pageApproximator.py .\example_book.epub 150
 ```
 This will produce a copy of `example_book.epub` paginated with 150 pages in the current directory under the name of `example_book_paginated.epub`.
 
+### Dependencies
+This script requires the `ebooklib` python library.
+
 ## Command-line Arguments
 ### positional:
 * **filepath**: Path to the EPUB file you wish to paginate.
