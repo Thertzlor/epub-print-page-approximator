@@ -11,7 +11,9 @@ def pageIdPattern(num:int,prefix = 'pg_break_'):
 
 printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc)]
 
-nodeText = lambda node : ''.join(node.itertext())
+def nodeText(node:etree.ElementBase):
+  if isinstance(node,etree._Comment): return ''
+  return ''.join([x for x in node.itertext('html','body','div','span','p','strong','em','a', 'b', 'i','h1','h2','h3','h4', 'h5','h6', 'title', 'figure', 'section','sub','ul','ol','li', 'abbr','blockquote', 'figcaption','aside','cite', 'code','pre', 'nav','tr', 'table','tbody','thead','header','th','td','math','mrow','mspace','msub','mi','mn','mo','var','mtable','mtr','mtd','mtext','msup','mfrac','msqrt','munderover','msubsup','mpadded','mphantom')])
 
 def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """https://stackoverflow.com/questions/3173320/"""
@@ -123,13 +125,15 @@ def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBas
   and one list of xml documents"""
   htmStrings:list[str] = [x.content for x in docs]
   htmDocs: list[etree.ElementBase] = [etree.fromstring(x,etree.HTMLParser()) for x in htmStrings]
-  stripStrings:list[str] = [''.join(x.itertext()) for x in htmDocs]
+  print(htmDocs[1])
+  stripStrings:list[str] = [nodeText(x) for x in htmDocs]
+  print([len(s) for s in stripStrings])
   stripSplits:list[int]=[0]
   currentStripSplit = 0
   docStats:list[etree.ElementBase] = []
   for [i,t] in enumerate(stripStrings):
     docStats.append(htmDocs[i])
-    currentStripSplit = currentStripSplit + len(t)
+    currentStripSplit = currentStripSplit + len(t or '')
     stripSplits.append(currentStripSplit)
   return [''.join(stripStrings),stripSplits,docStats]
 
@@ -167,7 +171,7 @@ def relPath(pathA:str,pathB:str):
 xns = {'x':'*'}
 
 
-def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],repDict:dict={}):
+def addListToNcx(ncx:EpubItem,linkList:list[str],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(ncx.content)
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
   def makeLabel(text:str|int):
@@ -176,48 +180,46 @@ def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],repDict:
     txt.text = str(text);
     label.append(txt)
     return label
-  getLink = lambda pageNo : f'{relPath(ncx.file_name,documents[docMap[pageNo]].file_name)}#{pageIdPattern(pageNo-1)}'
-  def makeTarget(number:int,customLink:str=None):
-    target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(number)})
-    target.append(makeLabel(number))
-    target.append(tag('content',{'src':customLink or getLink(number-1)}))
+  def makeTarget(number:int,offset=0):
+    target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(number+offset)})
+    target.append(makeLabel(number+offset))
+    target.append(tag('content',{'src':relPath(ncx.file_name,linkList[number])}))
     return target
   pList:etree.ElementBase = doc.find('x:pageList',xns)
   if(pList is not None): 
     put = input('EPUB NCX already has a pageList element.\nContinue and overwrite it? [y/N]')
     if put.lower() != 'y': return False
-    doc.remove(pList)
+    pList.getparent().remove(pList)
   genList = tag('pageList')
   genList.append(makeLabel('Pages'))
-  for i in range(len(docMap)): genList.append(makeTarget(i+1, i==0 and relPath(ncx.file_name,documents[0].file_name) or None))
+  for i in range(len(linkList)): genList.append(makeTarget(i,1))
   doc.append(genList)
   ncxString:str =  etree.tostring(doc)
   repDict[ncx.file_name] = ncxString.decode('utf-8').replace('<pageTarget','\n<pageTarget')
   return True
 
 
-def addListToNav(nav:EpubHtml,docMap:list[int],documents:list[EpubHtml],repDict:dict={}):
+def addListToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser())
-  getLink = lambda pageNo : f'{relPath(nav.file_name,documents[docMap[pageNo]].file_name)}#{pageIdPattern(pageNo-1)}'
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
-  def makeTarget(number:int,customLink:str=None):
+  def makeTarget(number:int,offset=0):
     target = tag('li')
-    link = tag('a',{'href':customLink or getLink(number-1)})
-    link.text=str(number)
+    link = tag('a',{'href':relPath(nav.file_name,linkList[number])})
+    link.text=str(number+offset)
     target.append(link)
     return target
   body:etree.ElementBase = doc.find('x:body',xns)
-  oldNav = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
+  oldNav:etree.ElementBase = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
   if(oldNav is not None): 
     put = input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]')
     if put.lower() != 'y': return False
-    doc.remove(oldNav)
+    oldNav.getparent().remove(oldNav)
   mainNav  = tag('nav',{'epub:type':'page-list', 'hidden':''})
   header = tag('h1')
   header.text='List of Pages'
   mainNav.append(header)
   lst = tag('ol')
-  for i in range(len(docMap)): lst.append(makeTarget(i+1, i==0 and relPath(nav.file_name,documents[0].file_name) or None))
+  for i in range(len(linkList)): lst.append(makeTarget(i,1))
   mainNav.append(lst)
   body.append(mainNav)
   navString:str =  etree.tostring(doc)
@@ -257,15 +259,16 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
     doc = docStats[docIndex]
     breakSpan:etree.ElementBase =  doc.makeelement('span')
     breakSpan.set('id',f'pg_break_{i}')
-    breakSpan.set('epub:type','pagebreak')
+    breakSpan.set('value',str(i+1))
+    # EPUB2 does not support the epub: namespace.
+    if epub3Nav is not None:breakSpan.set('epub:type','pagebreak')
     insertNodeAtTextPos(getNodeFromLocation(docLocation,nodeRanges(doc)),breakSpan)
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   pgLinks.reverse()
   repDict = {}
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x]).decode('utf-8')
-  # if epub3Nav and not noNav: 
-  #   if addListToNav(epub3Nav,pagesMapped,docs,repDict) == False: return print('Pagination Cancelled')
-  # if ncxNav and not noNcX: 
-  #  if addListToNcx(ncxNav,pagesMapped,docs,repDict) == False :return print('Pagination Cancelled')
-  
-  # overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
+  if epub3Nav and not noNav: 
+    if addListToNav(epub3Nav,pgLinks,repDict) == False: return print('Pagination Cancelled')
+  if ncxNav and not noNcX: 
+     if addListToNcx(ncxNav,pgLinks,repDict) == False :return print('Pagination Cancelled')
+  overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
