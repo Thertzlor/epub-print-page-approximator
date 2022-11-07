@@ -22,10 +22,11 @@ This script requires the `ebooklib` python library.
 * **filepath**: Path to the EPUB file you wish to paginate.
 * **pages**: The number of pages you want to add to the book.
 ### options:
-* **-h, --help**: show help message and exit.
+* **-b , --breakMode**: Behavior if a pagebreak is generated in the middle of a word; `next` will go to the next whitespace, `prev` will to the previous, `split` will simply keep the break inside the word.
 * **-s , --suffix**: Suffix for the newly generated EPUP file. Defaults to `_paginated`.
 * **-n , --name**: A new name for the newly generated EPUB file. Overrides the `--suffix` argument.
 * **-o , --outpath**: Save path for the output file. Does not include file name.
+* **-h, --help**: show help message and exit.
 ### flags
 * **--noNcx**: Do not insert a pageList Element into the EPUB2 ToC NCX file.
 * **--noNav**: Do not insert a page-list nav element into the EPUB3 navigation file.
