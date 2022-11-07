@@ -125,9 +125,7 @@ def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBas
   and one list of xml documents"""
   htmStrings:list[str] = [x.content for x in docs]
   htmDocs: list[etree.ElementBase] = [etree.fromstring(x,etree.HTMLParser()) for x in htmStrings]
-  print(htmDocs[1])
   stripStrings:list[str] = [nodeText(x) for x in htmDocs]
-  print([len(s) for s in stripStrings])
   stripSplits:list[int]=[0]
   currentStripSplit = 0
   docStats:list[etree.ElementBase] = []
@@ -237,7 +235,7 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False):
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,mode='next'):
   pub = read_epub(path)
   # getting all documents that are not the internal EPUB3 navigation
   ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
@@ -245,7 +243,7 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
   [stripText,stripSplits,docStats] = analyzeBook(docs)
-  stripPageIndex = approximatePageLocations(stripText,pages)
+  stripPageIndex = approximatePageLocations(stripText,pages,mode)
   pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
