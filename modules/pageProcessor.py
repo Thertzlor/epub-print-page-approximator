@@ -5,8 +5,6 @@ from ebooklib import ITEM_DOCUMENT, ITEM_NAVIGATION
 from ebooklib.epub import (EpubHtml, EpubItem, EpubNav, Link, etree, read_epub,
                            zipfile)
 
-xns = {'x':'*'}
-
 
 def pageIdPattern(num:int,prefix = 'pg_break_'):
   return f'{prefix}{num}'
@@ -15,7 +13,7 @@ printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc
 
 nodeText = lambda node : ''.join(node.itertext())
 
-def printProgressBar (iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """https://stackoverflow.com/questions/3173320/"""
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
@@ -77,16 +75,14 @@ def nodeRanges(node:etree.ElementBase,strippedText:str = None):
   return rangeList
 
 
-def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int,str]])->tuple[etree.ElementBase,int,int,bool,str]:
+def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int,str]])->tuple[etree.ElementBase,int,int]:
   """Returns node containing the specified location of strippedtext based on a list of node ranges (output from nodeRanges).\n
   The returned tuple contains:\n
   -the node itself\n
   -the distance of the location from the start of the node text\n
   -the distance of the location from the end of the node text\n
-  -a boolean expression indicating whether the location is closer to the start or end\n
-  -and finally the text of the node
   """
-  matches=[[x[0], strippedLoc-x[1], x[2] - strippedLoc ,abs(x[1]-strippedLoc) > abs(strippedLoc-x[2]),x[3]] for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc]
+  matches=[[x[0], strippedLoc-x[1], x[2] - strippedLoc] for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc]
   return matches[-1]
 
 
@@ -110,9 +106,9 @@ def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,stripp
   pass
 
 
-def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int,bool,str],newNode:etree.ElementBase):
+def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int],newNode:etree.ElementBase):
   """Takes a node position object (output from getNodeFromLocation)"""
-  [el,fromStart,fromEnd,_,t] = positionData
+  [el,fromStart,fromEnd] = positionData
   if el.text is not None and len(el.text) > fromStart: return insertIntoText(newNode,el,fromStart)
   if el.tail is not None and len(el.tail) > fromEnd: return insertIntoTail(newNode,el,len(el.tail)-fromEnd)
   offset = 0 if el.text is None else len(el.text)
@@ -124,7 +120,7 @@ def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int,bool,str],n
 
 def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBase]]:
   """Extract the full text content of an ebook, one string containing the full HTML, one containing only the text
-  and one list of locations mapping each document to a location within the main string"""
+  and one list of xml documents"""
   htmStrings:list[str] = [x.content for x in docs]
   htmDocs: list[etree.ElementBase] = [etree.fromstring(x,etree.HTMLParser()) for x in htmStrings]
   stripStrings:list[str] = [''.join(x.itertext()) for x in htmDocs]
@@ -132,8 +128,7 @@ def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBas
   currentStripSplit = 0
   docStats:list[etree.ElementBase] = []
   for [i,t] in enumerate(stripStrings):
-    doc = htmDocs[i]
-    docStats.append(doc)
+    docStats.append(htmDocs[i])
     currentStripSplit = currentStripSplit + len(t)
     stripSplits.append(currentStripSplit)
   return [''.join(stripStrings),stripSplits,docStats]
@@ -155,8 +150,7 @@ def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,htmSplits:lis
 
 
 def between (str,pos,around,sep='|'): 
-  """split a string at a certain position, highlight the split with a separator and output a range of characters to either side.
-
+  """split a string at a certain position, highlight the split with a separator and output a range of characters to either side.\n
   Used for debugging purposes"""
   return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
 
@@ -168,6 +162,9 @@ def relPath(pathA:str,pathB:str):
     if s == splitB[i]: pathDiff = pathDiff+1
     else: break
   return '/'.join(splitB[pathDiff:])
+
+
+xns = {'x':'*'}
 
 
 def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],repDict:dict={}):
@@ -241,28 +238,31 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
 def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False):
   pub = read_epub(path)
   # getting all documents that are not the internal EPUB3 navigation
+  ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
+  epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
+  if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
   [stripText,stripSplits,docStats] = analyzeBook(docs)
   stripPageIndex = approximatePageLocations(stripText,pages)
   pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
-  changedDocs = []
-
+  changedDocs:list[str] = []
+  pgLinks:list[str]=[]
   for [i,[pg,docIndex]] in reversed(list(enumerate(pagesMapped))):
     mapReport(pages-i,pages)
     docLocation = pg - stripSplits[docIndex]
-
+    #if the location is right at teh start of a file we just lnk to the file directly
+    pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}')
+    # no need to insert a break in this case either
+    if docLocation == 0: continue
     doc = docStats[docIndex]
     breakSpan:etree.ElementBase =  doc.makeelement('span')
     breakSpan.set('id',f'pg_break_{i}')
     breakSpan.set('epub:type','pagebreak')
     insertNodeAtTextPos(getNodeFromLocation(docLocation,nodeRanges(doc)),breakSpan)
     if docIndex not in changedDocs: changedDocs.append(docIndex)
-  ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
-  epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
-  if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
+  pgLinks.reverse()
   repDict = {}
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x]).decode('utf-8')
-  # print(repDict['bano_9781411433458_oeb_c14_r1.html'])
   # if epub3Nav and not noNav: 
   #   if addListToNav(epub3Nav,pagesMapped,docs,repDict) == False: return print('Pagination Cancelled')
   # if ncxNav and not noNcX: 
