@@ -7,18 +7,6 @@ from ebooklib.epub import (EpubHtml, EpubItem, EpubNav, Link, etree, read_epub,
 
 xns = {'x':'*'}
 
-wordTerminators = '.,! ?&*\n'
-nonWordChars = '\s><="'
-
-matcher = lambda word : f' ({re.escape(word)})[{wordTerminators}]'
-"""match a word in a way that is  very unlikely to occur within a html tag"""
-
-
-def spanner (num:str, offset=0,epub3=False) : 
-  """generate a span element used to designate a page break"""
-  typeString = epub3 and ' epub:type="pagebreak" ' or " "
-  return f'<span{typeString}title="{num+offset}" id="{pageIdPattern(num)}"/>'
-
 
 def pageIdPattern(num:int,prefix = 'pg_break_'):
   return f'{prefix}{num}'
@@ -52,34 +40,10 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
   print(f'succesfully saved {dest}')
   
 
-def safeWord(match:str,stripStr:str,htmStr:str):
-  """function for finding 'safe' word matches for inserting page breaks"""
-  ex = matcher(match)
-  [l1,l2] = [ len(re.findall(ex,x)) for x in [stripStr,htmStr]]
-  # a word is 'safe' if we can match it in the stripped and unstripped text the same number of times. 
-  return l1 == l2
-
-
-def findWord(string:str,preferredSize:int,stripStr:str,htmStr:str):
-  """function for finding the first 'safe' word match on a page, returns the word and its resulting offset"""
-  res = None
-  lastDex = 0
-  while res is None:
-    if preferredSize == 0: raise LookupError(f"can't find any safe words for current page: {htmStr}")
-    ex=f' ([^{nonWordChars}{wordTerminators}]{{{re.escape(str(preferredSize))},}})[{wordTerminators}]'
-    res = re.search(ex,string[lastDex:])
-    if res is not None and not safeWord(res[1],stripStr,htmStr):
-      lastDex = lastDex + res.end()
-      res = None
-    else: preferredSize = preferredSize -1 
-  return [res[1],lastDex+res.end()]
-
-
 def mapReport(a,b):
   """simple printout function for mapping progress"""
   printProgressBar(a,b,f'Mapping page {a} of {b}','Done',2)
   pass
-
 
 
 def approximatePageLocations(stripped:str, pages = 5, mode='split') -> list[int]:
@@ -112,6 +76,7 @@ def nodeRanges(node:etree.ElementBase,strippedText:str = None):
     if childText is None: baseIndex = myIndex + len(t)
   return rangeList
 
+
 def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int,str]])->tuple[etree.ElementBase,int,int,bool,str]:
   """Returns node containing the specified location of strippedtext based on a list of node ranges (output from nodeRanges).\n
   The returned tuple contains:\n
@@ -124,12 +89,14 @@ def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,
   matches=[[x[0], strippedLoc-x[1], x[2] - strippedLoc ,abs(x[1]-strippedLoc) > abs(strippedLoc-x[2]),x[3]] for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc]
   return matches[-1]
 
+
 def insertIntoText(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
   newText = parentNode.text[0:strippedLoc]
   newTail = parentNode.text[strippedLoc:]
   parentNode.text = newText
   newNode.tail = newTail
   parentNode.insert(0,newNode)
+
 
 def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
   newParentTail = parentNode.tail[0:strippedLoc]
@@ -142,6 +109,7 @@ def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,stripp
   parentNode.tail = newParentTail
   pass
 
+
 def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int,bool,str],newNode:etree.ElementBase):
   """Takes a node position object (output from getNodeFromLocation)"""
   [el,fromStart,fromEnd,_,t] = positionData
@@ -152,6 +120,7 @@ def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int,bool,str],n
     offset = offset+len(nodeText(c) or '')+len(c.tail or '')
     if fromStart < offset: return insertIntoTail(newNode,c,len(c.tail or '') - (offset-fromStart))
   print('could not find insertion spot',fromStart,fromEnd)
+
 
 def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBase]]:
   """Extract the full text content of an ebook, one string containing the full HTML, one containing only the text
@@ -200,8 +169,6 @@ def relPath(pathA:str,pathB:str):
     else: break
   return '/'.join(splitB[pathDiff:])
 
-
-def insertAt(value,targetString,index): return targetString[:index] + value + targetString[index:]
 
 def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(ncx.content)
