@@ -2,7 +2,7 @@ import math
 import re
 
 from ebooklib import ITEM_DOCUMENT, ITEM_NAVIGATION
-from ebooklib.epub import (EpubHtml, EpubItem, EpubNav, etree, read_epub,
+from ebooklib.epub import (EpubHtml, EpubItem, EpubNav, Link, etree, read_epub,
                            zipfile)
 
 xns = {'x':'*'}
@@ -34,7 +34,6 @@ def printProgressBar (iteration:int, total:int, prefix = '', suffix = '', decima
     # Print New Line on Complete
     if iteration == total: 
         print()
-
 
 def overrideZip(src:str,dest:str,repDict:dict={}):
   """Zip replacer from the internet because for some reason the write method of the ebook libraray breaks HTML"""
@@ -110,17 +109,36 @@ def approximatePageLocations(content:str, stripped:str, pages = 5) -> tuple[list
   return [realPageIndex,rawPageIndex,len(realPageIndex),len(rawPageIndex)]
 
 
-def mergeBook(docs:list[EpubHtml])-> tuple[str,str,list[int]]:
+def mergeBook(docs:list[EpubHtml])-> tuple[str,str,list[int],list[int]]:
   """Extract the full text content of an ebook, one string containing the full HTML, one containing only the text
   and one list of locations mapping each document to a location within the main string"""
   xmlStrings:list[str] = [x.content.decode('utf-8') for x in docs]
   innerStrings:list[str] = [''.join(etree.fromstring(x.content,etree.HTMLParser()).itertext()) for x in docs]
   splits:list[int]=[0]
+  textSplits:list[int]=[0]
   currentSplit = 0
-  for x in xmlStrings:
+  currentTextSplit = 0
+  for [i,x] in enumerate(xmlStrings):
     currentSplit = currentSplit + len(x)
+    currentTextSplit = currentTextSplit + len(innerStrings[i])
     splits.append(currentSplit)
-  return [''.join(xmlStrings),''.join(innerStrings),splits]
+    textSplits.append(currentTextSplit)
+  return [''.join(xmlStrings),''.join(innerStrings),splits,textSplits]
+
+
+def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,splits:list[int]):
+  links:list[str] = [x.href for x in toc]
+  locations:list[int] = []
+  for [i,l] in enumerate(links):
+    anchored = '#' in l
+    [doc,id] = (l.split('#') if anchored else [l,None])
+    [target,index] = next((x for x in enumerate(docs) if x[1].file_name == doc),[None,None])
+    if target is None: raise LookupError('Table of Contents contains link to nonexistent documents.')
+    if id is None: locations.append(splits[index])
+    else:
+      splitEnd = len(rawText) if i == len(splits) else splits[i+1]
+      docText = rawText[splits[i]:splitEnd]
+
 
 def between (str,pos,around,sep='|'): 
   """split a string at a certain position, highlight the split with a separator and output a range of characters to either side.
@@ -224,18 +242,36 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
     finalName = finalName[:-5]
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
+nodeText = lambda node : ''.join(node.itertext())
+
+def nodeRanges(node:etree.ElementBase,baseText:str = None):
+  if baseText is None: baseText= nodeText(node)
+  baseIndex = 0
+  withText:list[tuple[etree.ElementBase,str]] = [[x,nodeText(x)] for x in node.iter() if nodeText(x) != '']
+  rangeList:list[tuple[etree.ElementBase,int,int,str]] = []
+  for [e,t] in withText:
+    myIndex = baseText.find(t,baseIndex)
+    childText = next((nodeText(x) for x in iter(e) if nodeText(x) != ''),None)
+    if childText == t: continue
+    rangeList.append([e,myIndex,myIndex+len(t),t])
+    if childText is None: baseIndex = myIndex + len(t)
+  return rangeList
+
+def getNodeFromLocation(loc:int,ranges:list[tuple[etree.ElementBase,int,int,str]])->tuple[etree.ElementBase,bool,str]:
+  matches=[[x[0], abs(x[1]-loc) > abs(loc-x[2]),x[3]] for x in ranges if x[1] <= loc and x[2] > loc]
+  return matches[-1]
 
 def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False):
   pub = read_epub(path)
   # getting all documents that are not the internal EPUB3 navigation
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
-  [fullText,strippedText,splits] = mergeBook(docs)
-  [realPages,_,realCount,rawCount] = approximatePageLocations(fullText,strippedText,pages)
+  [fullText,strippedText,splits,rawSplits] = mergeBook(docs)
+  [realPages,rawPages,realCount,rawCount] = approximatePageLocations(fullText,strippedText,pages)
   pageMap = [ next(y[0]-1 for y in enumerate(splits) if y[1] > x) for x in realPages]
   if(realCount != rawCount): print("WARNING! Page counts don't make sense")
   ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
   epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
-  if ncxNav is None and epub3Nav is None: raise BaseException('No navigation files found in EPUB, file probably is not valid.')
+  if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
   repDict = {}
   insertPageBreaks(realPages,pageMap,splits,docs,repDict,epub3Nav is not None)
   if epub3Nav and not noNav: 
