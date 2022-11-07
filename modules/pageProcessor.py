@@ -46,17 +46,17 @@ def mapReport(a,b):
   pass
 
 
-def approximatePageLocations(stripped:str, pages = 5, mode='split') -> list[int]:
+def approximatePageLocations(stripped:str, pages = 5, breakMode='split') -> list[int]:
   pgSize = math.ceil(len(stripped)/pages)
   print(f'Calculated approximate page size of {pgSize} characters')
   pgList = [i*pgSize for i in range(pages)]
-  if mode == 'split': return pgList
+  if breakMode == 'split': return pgList
   for [i,p] in enumerate(pgList):
     page = stripped[p:p+pgSize]
-    if mode == 'prev': page = page[::-1]
+    if breakMode == 'prev': page = page[::-1]
     nextSpace = re.search(r'\s',page)
     if nextSpace is not None: 
-      pgList[i] = (p + nextSpace.start() * (1 if mode == 'next' else -1)) 
+      pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1)) 
   return pgList
 
 
@@ -235,7 +235,7 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,mode='next'):
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next'):
   pub = read_epub(path)
   # getting all documents that are not the internal EPUB3 navigation
   ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
@@ -243,7 +243,7 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
   [stripText,stripSplits,docStats] = analyzeBook(docs)
-  stripPageIndex = approximatePageLocations(stripText,pages,mode)
+  stripPageIndex = approximatePageLocations(stripText,pages,breakMode)
   pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
