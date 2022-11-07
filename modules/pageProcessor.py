@@ -25,6 +25,8 @@ def pageIdPattern(num:int,prefix = 'pg_break_'):
 
 printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc)]
 
+nodeText = lambda node : ''.join(node.itertext())
+
 def printProgressBar (iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """https://stackoverflow.com/questions/3173320/"""
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
@@ -50,23 +52,23 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
   print(f'succesfully saved {dest}')
   
 
-def safeWord(match:str,stripStr:str,fullStr:str):
+def safeWord(match:str,stripStr:str,htmStr:str):
   """function for finding 'safe' word matches for inserting page breaks"""
   ex = matcher(match)
-  [l1,l2] = [ len(re.findall(ex,x)) for x in [stripStr,fullStr]]
+  [l1,l2] = [ len(re.findall(ex,x)) for x in [stripStr,htmStr]]
   # a word is 'safe' if we can match it in the stripped and unstripped text the same number of times. 
   return l1 == l2
 
 
-def findWord(string:str,preferredSize:int,stripStr:str,fullStr:str):
+def findWord(string:str,preferredSize:int,stripStr:str,htmStr:str):
   """function for finding the first 'safe' word match on a page, returns the word and its resulting offset"""
   res = None
   lastDex = 0
   while res is None:
-    if preferredSize == 0: raise LookupError(f"can't find any safe words for current page: {fullStr}")
+    if preferredSize == 0: raise LookupError(f"can't find any safe words for current page: {htmStr}")
     ex=f' ([^{nonWordChars}{wordTerminators}]{{{re.escape(str(preferredSize))},}})[{wordTerminators}]'
     res = re.search(ex,string[lastDex:])
-    if res is not None and not safeWord(res[1],stripStr,fullStr):
+    if res is not None and not safeWord(res[1],stripStr,htmStr):
       lastDex = lastDex + res.end()
       res = None
     else: preferredSize = preferredSize -1 
@@ -79,54 +81,96 @@ def mapReport(a,b):
   pass
 
 
-def approximatePageLocations(content:str, stripped:str, pages = 5) -> tuple[list[int],list[int],int,int]:
+
+def approximatePageLocations(stripped:str, pages = 5, mode='split') -> list[int]:
   pgSize = math.ceil(len(stripped)/pages)
   print(f'Calculated approximate page size of {pgSize} characters')
-  # we assume that each HTML page is not 100 times bigger than the "raw" page text page to speed up performance
-  pgLookaround = pgSize*100
-  realPageIndex = [0]
-  rawPageIndex = [0]
-  rawPageOffset = [0]
-  mapReport(1,pages)
-  for i in range(pages-1):
-    mapReport(i+2,pages)
-    pageEnd = (rawPageIndex[-1]+pgSize) - rawPageOffset[-1]
-    htPart = content[realPageIndex[-1]:realPageIndex[-1]+pgLookaround]
-    rawPart = stripped[rawPageIndex[-1]:rawPageIndex[-1]+pgLookaround]
-    currentPage = stripped[rawPageIndex[-1]:pageEnd]
-    nextPage = stripped[pageEnd:pageEnd+pgSize]
-    [lastWord,currentOffset] = findWord(nextPage,3,rawPart,htPart)
-    rawPageIndex.append(pageEnd+currentOffset)
-    rawPageOffset.append(currentOffset)
-    wordEx = matcher(lastWord)
-    occurrences = len(re.findall(wordEx,currentPage))
-    rawMatches = [x for x in enumerate(re.finditer(wordEx,htPart))]
-    for [i,match] in rawMatches:
-      realOffset = match.end()
-      if i == occurrences:
-        realPageIndex.append(realOffset+realPageIndex[-1])
-        break
-  return [realPageIndex,rawPageIndex,len(realPageIndex),len(rawPageIndex)]
+  pgList = [i*pgSize for i in range(pages)]
+  if mode == 'split': return pgList
+  for [i,p] in enumerate(pgList):
+    page = stripped[p:p+pgSize]
+    if mode == 'prev': page = page[::-1]
+    nextSpace = re.search(r'\s',page)
+    if nextSpace is not None: 
+      pgList[i] = (p + nextSpace.start() * (1 if mode == 'next' else -1)) 
+  return pgList
 
 
-def mergeBook(docs:list[EpubHtml])-> tuple[str,str,list[int],list[int]]:
+def nodeRanges(node:etree.ElementBase,strippedText:str = None):
+  """Receives a node and optionally the stripped text of that node.\n
+  Returns a List of tuples, each consisting of a child element, offsets for where its text content starts and ends as well as the text itself
+  """
+  if strippedText is None: strippedText= nodeText(node)
+  baseIndex = 0
+  withText:list[tuple[etree.ElementBase,str]] = [[x,nodeText(x)] for x in node.iter() if nodeText(x) != '']
+  rangeList:list[tuple[etree.ElementBase,int,int,str]] = []
+  for [e,t] in withText:
+    myIndex = strippedText.find(t,baseIndex)
+    childText = next((nodeText(x) for x in iter(e) if nodeText(x) != ''),None)
+    if childText == t: continue
+    rangeList.append([e,myIndex,myIndex+len(t),t])
+    if childText is None: baseIndex = myIndex + len(t)
+  return rangeList
+
+def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int,str]])->tuple[etree.ElementBase,int,int,bool,str]:
+  """Returns node containing the specified location of strippedtext based on a list of node ranges (output from nodeRanges).\n
+  The returned tuple contains:\n
+  -the node itself\n
+  -the distance of the location from the start of the node text\n
+  -the distance of the location from the end of the node text\n
+  -a boolean expression indicating whether the location is closer to the start or end\n
+  -and finally the text of the node
+  """
+  matches=[[x[0], strippedLoc-x[1], x[2] - strippedLoc ,abs(x[1]-strippedLoc) > abs(strippedLoc-x[2]),x[3]] for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc]
+  return matches[-1]
+
+def insertIntoText(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
+  newText = parentNode.text[0:strippedLoc]
+  newTail = parentNode.text[strippedLoc:]
+  parentNode.text = newText
+  newNode.tail = newTail
+  parentNode.insert(0,newNode)
+
+def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
+  newParentTail = parentNode.tail[0:strippedLoc]
+  newChildTail = parentNode.tail[strippedLoc:]
+  #deleting zhe old tail, or else it will be added twice
+  parentNode.tail=''
+  newNode.tail = newChildTail
+  parentNode.addnext(newNode)
+  #setting the new tail
+  parentNode.tail = newParentTail
+  pass
+
+def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int,bool,str],newNode:etree.ElementBase):
+  """Takes a node position object (output from getNodeFromLocation)"""
+  [el,fromStart,fromEnd,_,t] = positionData
+  if el.text is not None and len(el.text) > fromStart: return insertIntoText(newNode,el,fromStart)
+  if el.tail is not None and len(el.tail) > fromEnd: return insertIntoTail(newNode,el,len(el.tail)-fromEnd)
+  offset = 0 if el.text is None else len(el.text)
+  for c in el:
+    offset = offset+len(nodeText(c) or '')+len(c.tail or '')
+    if fromStart < offset: return insertIntoTail(newNode,c,len(c.tail or '') - (offset-fromStart))
+  print('could not find insertion spot',fromStart,fromEnd)
+
+def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBase]]:
   """Extract the full text content of an ebook, one string containing the full HTML, one containing only the text
   and one list of locations mapping each document to a location within the main string"""
-  xmlStrings:list[str] = [x.content.decode('utf-8') for x in docs]
-  innerStrings:list[str] = [''.join(etree.fromstring(x.content,etree.HTMLParser()).itertext()) for x in docs]
-  splits:list[int]=[0]
-  textSplits:list[int]=[0]
-  currentSplit = 0
-  currentTextSplit = 0
-  for [i,x] in enumerate(xmlStrings):
-    currentSplit = currentSplit + len(x)
-    currentTextSplit = currentTextSplit + len(innerStrings[i])
-    splits.append(currentSplit)
-    textSplits.append(currentTextSplit)
-  return [''.join(xmlStrings),''.join(innerStrings),splits,textSplits]
+  htmStrings:list[str] = [x.content for x in docs]
+  htmDocs: list[etree.ElementBase] = [etree.fromstring(x,etree.HTMLParser()) for x in htmStrings]
+  stripStrings:list[str] = [''.join(x.itertext()) for x in htmDocs]
+  stripSplits:list[int]=[0]
+  currentStripSplit = 0
+  docStats:list[etree.ElementBase] = []
+  for [i,t] in enumerate(stripStrings):
+    doc = htmDocs[i]
+    docStats.append(doc)
+    currentStripSplit = currentStripSplit + len(t)
+    stripSplits.append(currentStripSplit)
+  return [''.join(stripStrings),stripSplits,docStats]
 
 
-def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,splits:list[int]):
+def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,htmSplits:list[int],strippedSplits:list[int]):
   links:list[str] = [x.href for x in toc]
   locations:list[int] = []
   for [i,l] in enumerate(links):
@@ -134,10 +178,11 @@ def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,splits:list[i
     [doc,id] = (l.split('#') if anchored else [l,None])
     [target,index] = next((x for x in enumerate(docs) if x[1].file_name == doc),[None,None])
     if target is None: raise LookupError('Table of Contents contains link to nonexistent documents.')
-    if id is None: locations.append(splits[index])
+    if id is None: locations.append(strippedSplits[index])
     else:
-      splitEnd = len(rawText) if i == len(splits) else splits[i+1]
-      docText = rawText[splits[i]:splitEnd]
+      splitEnd = len(rawText) if i == len(htmSplits) else htmSplits[i+1]
+      docText = rawText[htmSplits[i]:splitEnd]
+  return locations
 
 
 def between (str,pos,around,sep='|'): 
@@ -157,23 +202,6 @@ def relPath(pathA:str,pathB:str):
 
 
 def insertAt(value,targetString,index): return targetString[:index] + value + targetString[index:]
-
-def insertPageBreaks(pageLocations:list[int],pageMap:list[int],docOffsets:list[int],documents:list[EpubHtml],repDict:dict={},epub3=False):
-  perDoc = [[y[1] - docOffsets[x[0]] for y in enumerate(pageLocations) if x[0] == pageMap[y[0]]] for x in enumerate(documents)]
-  currentNo = 0
-  for [i,locList] in enumerate(perDoc):
-    if len(locList) == 0: continue
-    doc = documents[i]
-    docText:str = doc.content.decode('utf-8')
-    offset = 0
-    for loc in locList:
-      if loc == 0: continue
-      newSpan = spanner(currentNo,2,epub3)
-      docText = insertAt(newSpan,docText,loc+offset)
-      currentNo = currentNo + 1
-      offset = offset + len(newSpan)
-    repDict[doc.file_name] = docText
-
 
 def addListToNcx(ncx:EpubItem,docMap:list[int],documents:list[EpubHtml],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(ncx.content)
@@ -242,41 +270,35 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
     finalName = finalName[:-5]
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
-nodeText = lambda node : ''.join(node.itertext())
-
-def nodeRanges(node:etree.ElementBase,baseText:str = None):
-  if baseText is None: baseText= nodeText(node)
-  baseIndex = 0
-  withText:list[tuple[etree.ElementBase,str]] = [[x,nodeText(x)] for x in node.iter() if nodeText(x) != '']
-  rangeList:list[tuple[etree.ElementBase,int,int,str]] = []
-  for [e,t] in withText:
-    myIndex = baseText.find(t,baseIndex)
-    childText = next((nodeText(x) for x in iter(e) if nodeText(x) != ''),None)
-    if childText == t: continue
-    rangeList.append([e,myIndex,myIndex+len(t),t])
-    if childText is None: baseIndex = myIndex + len(t)
-  return rangeList
-
-def getNodeFromLocation(loc:int,ranges:list[tuple[etree.ElementBase,int,int,str]])->tuple[etree.ElementBase,bool,str]:
-  matches=[[x[0], abs(x[1]-loc) > abs(loc-x[2]),x[3]] for x in ranges if x[1] <= loc and x[2] > loc]
-  return matches[-1]
 
 def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False):
   pub = read_epub(path)
   # getting all documents that are not the internal EPUB3 navigation
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
-  [fullText,strippedText,splits,rawSplits] = mergeBook(docs)
-  [realPages,rawPages,realCount,rawCount] = approximatePageLocations(fullText,strippedText,pages)
-  pageMap = [ next(y[0]-1 for y in enumerate(splits) if y[1] > x) for x in realPages]
-  if(realCount != rawCount): print("WARNING! Page counts don't make sense")
+  [stripText,stripSplits,docStats] = analyzeBook(docs)
+  stripPageIndex = approximatePageLocations(stripText,pages)
+  pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
+  changedDocs = []
+
+  for [i,[pg,docIndex]] in reversed(list(enumerate(pagesMapped))):
+    mapReport(pages-i,pages)
+    docLocation = pg - stripSplits[docIndex]
+
+    doc = docStats[docIndex]
+    breakSpan:etree.ElementBase =  doc.makeelement('span')
+    breakSpan.set('id',f'pg_break_{i}')
+    breakSpan.set('epub:type','pagebreak')
+    insertNodeAtTextPos(getNodeFromLocation(docLocation,nodeRanges(doc)),breakSpan)
+    if docIndex not in changedDocs: changedDocs.append(docIndex)
   ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
   epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
   repDict = {}
-  insertPageBreaks(realPages,pageMap,splits,docs,repDict,epub3Nav is not None)
-  if epub3Nav and not noNav: 
-    if addListToNav(epub3Nav,pageMap,docs,repDict) == False: return print('Pagination Cancelled')
-  if ncxNav and not noNcX: 
-   if addListToNcx(ncxNav,pageMap,docs,repDict) == False :return print('Pagination Cancelled')
+  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x]).decode('utf-8')
+  # print(repDict['bano_9781411433458_oeb_c14_r1.html'])
+  # if epub3Nav and not noNav: 
+  #   if addListToNav(epub3Nav,pagesMapped,docs,repDict) == False: return print('Pagination Cancelled')
+  # if ncxNav and not noNcX: 
+  #  if addListToNcx(ncxNav,pagesMapped,docs,repDict) == False :return print('Pagination Cancelled')
   
-  overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
+  # overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
