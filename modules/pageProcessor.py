@@ -10,11 +10,12 @@ def pageIdPattern(num:int,prefix = 'pg_break_'):
   return f'{prefix}{num}'
 
 printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc)]
+"""Output all entries of a table of contents to the console. Not used yet."""
 
 def nodeText(node:etree.ElementBase):
   if isinstance(node,etree._Comment): return ''
-  # A list of all valid HTML tags that we want to include in our text.
-  # If we don't filter itertext includes the content of tags like head, meta and style, which makes no sense for our purposes.
+  # We include list of all valid HTML tags that we want to include in our text.
+  # If we don't filter, itertext includes the content of tags like head, meta and style, which makes no sense for our purposes.
   return ''.join([x for x in node.itertext('html','body','div','span','p','strong','em','a', 'b', 'i','h1','h2','h3','h4', 'h5','h6', 'title', 'figure', 'section','sub','ul','ol','li', 'abbr','blockquote', 'figcaption','aside','cite', 'code','pre', 'nav','tr', 'table','tbody','thead','header','th','td','math','mrow','mspace','msub','mi','mn','mo','var','mtable','mtr','mtd','mtext','msup','mfrac','msqrt','munderover','msubsup','mpadded','mphantom')])
 
 def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
@@ -28,7 +29,7 @@ def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimal
         print()
 
 def overrideZip(src:str,dest:str,repDict:dict={}):
-  """Zip replacer from the internet because for some reason the write method of the ebook libraray breaks HTML"""
+  """Zip replacer from the internet because for some reason the write method of the ebook library breaks HTML"""
   with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=zipfile.ZIP_DEFLATED) as outZip:
     # Iterate the input files
     for inZipInfo in inZip.infolist():
@@ -49,7 +50,7 @@ def mapReport(a,b):
   pass
 
 
-def splitstr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
+def splitStr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
 
 
 def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int):
@@ -62,7 +63,7 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int):
     lines= splits
   else:
     # splitting up all lines above the maximum length
-    splitLines = [splitstr(x,pageMode) for x in splits]
+    splitLines = [splitStr(x,pageMode) for x in splits]
     # flattening our list of split up strings back into a regular list of strings
     lines = [item for sublist in splitLines for item in sublist]
   # This should only seldomly happen, but best to be prepared.
@@ -242,34 +243,48 @@ def relativePath(pathA:str,pathB:str):
 xns = {'x':'*'}
 """Universal namespace for XML traversals"""
 
-def addListToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
+def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
+  """Function to populate a EPUB2 NCX file with our new list of pages."""
+  # getting the XML document
   doc:etree.ElementBase = etree.fromstring(ncx.content)
+  # function for generating elements, mostly used to get proper autocomplete
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
+
   def makeLabel(text:str|int):
+    """Generates a navLabel with a child text element, containing the specified text."""
     label = tag('navLabel')
     txt = tag('text')
     txt.text = str(text)
     label.append(txt)
     return label
+
   def makeTarget(number:int,offset=0):
+    "Generates a pageTargets element containing a content tag with a link to the specified page number"
     target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(number+offset)})
     target.append(makeLabel(number+offset))
     target.append(tag('content',{'src':relativePath(ncx.file_name,linkList[number])}))
     return target
+
   pList:etree.ElementBase = doc.find('x:pageList',xns)
+  # the ncx file might already have a pageList element.
   if(pList is not None): 
     if input('EPUB NCX already has a pageList element.\nContinue and overwrite it? [y/N]').lower() != 'y': return False
+    # getting rid of the old element
     pList.getparent().remove(pList)
+  # the new tag we are inserting
   genList = tag('pageList')
+  # we don't technically need a label, but it's polite to have one I guess.
   genList.append(makeLabel('Pages'))
+  # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
   for i in range(len(linkList)): genList.append(makeTarget(i,1))
   doc.append(genList)
-  ncxString:str = etree.tostring(doc)
-  repDict[ncx.file_name] = ncxString.decode('utf-8').replace('<pageTarget','\n<pageTarget')
+  # inserting the final text of our ncx file into our dictionary of changes.
+  # also inserting line breaks for prettier formatting.
+  repDict[ncx.file_name] = etree.tostring(doc).decode('utf-8').replace('<pageTarget','\n<pageTarget')
   return True
 
 
-def addListToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
+def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser())
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
   def makeTarget(number:int,offset=0):
@@ -291,8 +306,7 @@ def addListToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   for i in range(len(linkList)): lst.append(makeTarget(i,1))
   mainNav.append(lst)
   body.append(mainNav)
-  navString:str = etree.tostring(doc)
-  repDict[nav.file_name] = navString.decode('utf-8').replace('<li','\n<li')
+  repDict[nav.file_name] = etree.tostring(doc).decode('utf-8').replace('<li','\n<li')
   return True
 
 
@@ -344,6 +358,7 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
   # getting all documents that are not the internal EPUB3 navigation
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
+  # 
   [stripText,stripSplits,docStats] = analyzeBook(docs)
   stripPageIndex = approximatePageLocations(stripText,pages,breakMode,pageMode)
   pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
@@ -351,7 +366,8 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   repDict = {}
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x]).decode('utf-8')
   if epub3Nav and not noNav: 
-    if addListToNav(epub3Nav,pgLinks,repDict) == False: return print('Pagination Cancelled')
+    if addLinksToNav(epub3Nav,pgLinks,repDict) == False: return print('Pagination Cancelled')
   if ncxNav and not noNcX: 
-     if addListToNcx(ncxNav,pgLinks,repDict) == False :return print('Pagination Cancelled')
+     if addLinksToNcx(ncxNav,pgLinks,repDict) == False :return print('Pagination Cancelled')
+  # finally, we save all our changed files into a new EPUB.
   overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
