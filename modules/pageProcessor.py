@@ -273,7 +273,6 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
     pList.getparent().remove(pList)
   # the new tag we are inserting
   genList = tag('pageList')
-  # we don't technically need a label, but it's polite to have one I guess.
   genList.append(makeLabel('Pages'))
   # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
   for i in range(len(linkList)): genList.append(makeTarget(i,1))
@@ -285,38 +284,52 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
 
 
 def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
+  """Function to populate a EPUB3 Nav.xhtml file with our new list of pages."""
   doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser())
+  # function for generating elements, mostly used to get proper autocomplete
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
   def makeTarget(number:int,offset=0):
+    """generating a list entry with a link to the page break element."""
     target = tag('li')
     link = tag('a',{'href':relativePath(nav.file_name,linkList[number])})
     link.text=str(number+offset)
     target.append(link)
     return target
+  
   body:etree.ElementBase = doc.find('x:body',xns)
+  # perhaps teh file already has a page-list navigation element
   oldNav:etree.ElementBase = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
   if(oldNav is not None): 
     if input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]').lower() != 'y': return False
+    # getting rid of the old element
     oldNav.getparent().remove(oldNav)
+  # generating a new navigation tag for our list and hiding it.
   mainNav = tag('nav',{'epub:type':'page-list', 'hidden':''})
+  # we don't technically need a header, but it's polite to have one I guess.
   header = tag('h1')
   header.text='List of Pages'
   mainNav.append(header)
   lst = tag('ol')
+  # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
   for i in range(len(linkList)): lst.append(makeTarget(i,1))
   mainNav.append(lst)
   body.append(mainNav)
+  # inserting the final text of our nav.xhtml file into our dictionary of changes.
+  # also inserting line breaks for prettier formatting.
   repDict[nav.file_name] = etree.tostring(doc).decode('utf-8').replace('<li','\n<li')
   return True
 
 
 def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_paginated'):
+  """Function to generate an output path for the new EPUB based on user preferences"""
   pathSplit = oldPath.split("/")
   oldFileName = pathSplit.pop()
+  # if there's a new name, the suffix isn't necessary.
   if newName is not None:suffix = ''
   finalName = newName or oldFileName
-  if finalName.lower().endswith('.epub'):
-    finalName = finalName[:-5]
+  # the epub extension may be omitted, but in case it isn't we cut it off here.
+  if finalName.lower().endswith('.epub'): finalName = finalName[:-5]
+  # putting the path back together
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
 
@@ -356,14 +369,18 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   epub3Nav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
   # a valid EPUB will have at least one type of navigation.
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
-  # getting all documents that are not the internal EPUB3 navigation
+  # getting all documents that are not the internal EPUB3 navigation.
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
-  # 
+  # processing the book contents.
   [stripText,stripSplits,docStats] = analyzeBook(docs)
-  stripPageIndex = approximatePageLocations(stripText,pages,breakMode,pageMode)
-  pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
+  # figuring out where the pages are located, and mapping those locations back onto the individual documents.
+  pagesMapped:list[tuple[int,int]] = [
+    [x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] 
+    for x in approximatePageLocations(stripText,pages,breakMode,pageMode)
+  ]
   [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav)
   repDict = {}
+  # adding all changed documents to our dictionary of changed files
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x]).decode('utf-8')
   if epub3Nav and not noNav: 
     if addLinksToNav(epub3Nav,pgLinks,repDict) == False: return print('Pagination Cancelled')
