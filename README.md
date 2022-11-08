@@ -1,3 +1,4 @@
+![license](https://img.shields.io/github/license/Thertzlor/epub-print-page-approximator) [![CodeFactor](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/badge/main)](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/overview/main)
 # Print Page Approximator for EPUB and EPUB3
 One of the biggest advantages of Ebooks is the freedom that dynamically reflowing text grants the reader.  
 However, having constantly shifting page numbers whenever you resize the text or change the font is often annyoing. Static print pages, even if they are technically no longer applicable, still have the advantage of being consistent.  
