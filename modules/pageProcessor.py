@@ -1,9 +1,8 @@
-import math
-import re
+from math import floor
+from re import search
 
 from ebooklib import ITEM_DOCUMENT, ITEM_NAVIGATION
-from ebooklib.epub import (EpubHtml, EpubItem, EpubNav, Link, etree, read_epub,
-                           zipfile)
+from ebooklib.epub import EpubHtml, EpubNav, Link, etree, read_epub, zipfile
 
 
 def pageIdPattern(num:int,prefix = 'pg_break_'):
@@ -73,14 +72,14 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
   if pageMode == 'lines' or isinstance(pageMode, int): 
     return approximatePageLocationsByLine(stripped,pages,breakMode,pageMode)
 
-  pgSize = math.ceil(len(stripped)/pages)
+  pgSize = floor(len(stripped)/pages)
   print(f'Calculated approximate page size of {pgSize} characters')
   pgList = [i*pgSize for i in range(pages)]
   if breakMode == 'split': return pgList
   for [i,p] in enumerate(pgList):
     page = stripped[p:p+pgSize]
     if breakMode == 'prev': page = page[::-1]
-    nextSpace = re.search(r'\s',page)
+    nextSpace = search(r'\s',page)
     if nextSpace is not None: 
       pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1)) 
   return pgList
@@ -198,7 +197,7 @@ def relPath(pathA:str,pathB:str):
 xns = {'x':'*'}
 
 
-def addListToNcx(ncx:EpubItem,linkList:list[str],repDict:dict={}):
+def addListToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(ncx.content)
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
   def makeLabel(text:str|int):
