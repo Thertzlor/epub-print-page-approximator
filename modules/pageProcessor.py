@@ -13,7 +13,8 @@ printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc
 
 def nodeText(node:etree.ElementBase):
   if isinstance(node,etree._Comment): return ''
-  # A list of all 
+  # A list of all valid HTML tags that we want to include in our text.
+  # If we don't filter itertext includes the content of tags like head, meta and style, which makes no sense for our purposes.
   return ''.join([x for x in node.itertext('html','body','div','span','p','strong','em','a', 'b', 'i','h1','h2','h3','h4', 'h5','h6', 'title', 'figure', 'section','sub','ul','ol','li', 'abbr','blockquote', 'figcaption','aside','cite', 'code','pre', 'nav','tr', 'table','tbody','thead','header','th','td','math','mrow','mspace','msub','mi','mn','mo','var','mtable','mtr','mtd','mtext','msup','mfrac','msqrt','munderover','msubsup','mpadded','mphantom')])
 
 def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
@@ -69,9 +70,9 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int):
   lineOffset=0
   lineLocations:list[int]=[]
   # for most of the splitting we don't care about text content, just locations.
-  for l in lines:
+  for line in lines:
     lineLocations.append(lineOffset)
-    lineOffset = lineOffset + len(l)
+    lineOffset = lineOffset + len(line)
   # calculating the number of lines per page.
   step = len(lines)/pages
   # step is a float, so we round it to get a valid index.
@@ -189,17 +190,17 @@ def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int],newNode:et
 def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBase]]:
   """Extract the full text content of an ebook, outputs the text stripped of HTML, a list of document locations within that string and one list of xml documents"""
   htmStrings:list[str] = [x.content for x in docs]
-
+  # getting all documents.
   htmDocs: list[etree.ElementBase] = [etree.fromstring(x,etree.HTMLParser()) for x in htmStrings]
+  # extracting all text.
   stripStrings:list[str] = [nodeText(x) for x in htmDocs]
   stripSplits:list[int]=[0]
   currentStripSplit = 0
-  docStats:list[etree.ElementBase] = []
-  for [i,t] in enumerate(stripStrings):
-    docStats.append(htmDocs[i])
-    currentStripSplit = currentStripSplit + len(t or '')
+  for string in stripStrings:
+    currentStripSplit = currentStripSplit + len(string or '')
+    # saving where each separate document starts within the text.
     stripSplits.append(currentStripSplit)
-  return [''.join(stripStrings),stripSplits,docStats]
+  return [''.join(stripStrings),stripSplits,htmDocs]
 
 
 def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,htmSplits:list[int],strippedSplits:list[int]):
@@ -224,17 +225,22 @@ def between (str,pos,around,sep='|'):
   return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
 
 
-def relPath(pathA:str,pathB:str):
+def relativePath(pathA:str,pathB:str):
+  """A function to adjust link paths in case the navigation and content documents are in the same path."""
   [splitA,splitB] = [x.split('/') for x in[pathA,pathB]]
   pathDiff=0
+  # comparing each path section of our files.
   for [i,s] in enumerate(splitA):
+    # If the path is the same we will remove it from the link
     if s == splitB[i]: pathDiff = pathDiff+1
+    # here we found the first section which is not the same
     else: break
+  # returning the pruned path.
   return '/'.join(splitB[pathDiff:])
 
 
 xns = {'x':'*'}
-
+"""Universal namespace for XML traversals"""
 
 def addListToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
   doc:etree.ElementBase = etree.fromstring(ncx.content)
@@ -248,7 +254,7 @@ def addListToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
   def makeTarget(number:int,offset=0):
     target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(number+offset)})
     target.append(makeLabel(number+offset))
-    target.append(tag('content',{'src':relPath(ncx.file_name,linkList[number])}))
+    target.append(tag('content',{'src':relativePath(ncx.file_name,linkList[number])}))
     return target
   pList:etree.ElementBase = doc.find('x:pageList',xns)
   if(pList is not None): 
@@ -268,7 +274,7 @@ def addListToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
   def makeTarget(number:int,offset=0):
     target = tag('li')
-    link = tag('a',{'href':relPath(nav.file_name,linkList[number])})
+    link = tag('a',{'href':relativePath(nav.file_name,linkList[number])})
     link.text=str(number+offset)
     target.append(link)
     return target
