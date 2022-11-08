@@ -46,7 +46,30 @@ def mapReport(a,b):
   pass
 
 
-def approximatePageLocations(stripped:str, pages = 5, breakMode='split') -> list[int]:
+def splitstr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
+
+
+def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars') -> list[int]:
+  pgList = []
+  if pageMode == 'lines' or isinstance(pageMode, int):
+    lines:list[str]=[]
+    splits = stripped.splitlines(keepends=True)
+    if pageMode == 'lines':
+      lines= splits
+    else:
+      splitLines =  [splitstr(x,pageMode) for x in splits]
+      lines = [item for sublist in splitLines for item in sublist]
+    if len(lines) < pages: raise BaseException(f'The number of detected lines in the book ({len(lines)}) is smaller than the number of pages to generate ({pages}). Consider using the "chars" paging mode for this book.')
+    lineOffset=0
+    lineLocations:list[int]=[]
+    for [i,l] in enumerate(lines):
+      lineLocations.append(lineOffset)
+      lineOffset = lineOffset + len(l)
+    
+    step = len(lines)/pages
+    pgList = [lineLocations[round(step*i)] for i in range(pages)]
+    return pgList
+
   pgSize = math.ceil(len(stripped)/pages)
   print(f'Calculated approximate page size of {pgSize} characters')
   pgList = [i*pgSize for i in range(pages)]
@@ -97,6 +120,10 @@ def insertIntoText(newNode:etree.ElementBase,parentNode:etree.ElementBase,stripp
 
 
 def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
+  if parentNode.tag is not None:
+    if parentNode.tag.lower() == 'body': return parentNode.insert(-1,newNode)
+    if parentNode.tag.lower() == 'html': return parentNode.find('x:body',xns).insert(-1,newNode)
+
   newParentTail = parentNode.tail[0:strippedLoc]
   newChildTail = parentNode.tail[strippedLoc:]
   #deleting zhe old tail, or else it will be added twice
@@ -105,7 +132,6 @@ def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,stripp
   parentNode.addnext(newNode)
   #setting the new tail
   parentNode.tail = newParentTail
-  pass
 
 
 def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int],newNode:etree.ElementBase):
@@ -185,8 +211,7 @@ def addListToNcx(ncx:EpubItem,linkList:list[str],repDict:dict={}):
     return target
   pList:etree.ElementBase = doc.find('x:pageList',xns)
   if(pList is not None): 
-    put = input('EPUB NCX already has a pageList element.\nContinue and overwrite it? [y/N]')
-    if put.lower() != 'y': return False
+    if input('EPUB NCX already has a pageList element.\nContinue and overwrite it? [y/N]').lower() != 'y': return False
     pList.getparent().remove(pList)
   genList = tag('pageList')
   genList.append(makeLabel('Pages'))
@@ -209,8 +234,7 @@ def addListToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   body:etree.ElementBase = doc.find('x:body',xns)
   oldNav:etree.ElementBase = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
   if(oldNav is not None): 
-    put = input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]')
-    if put.lower() != 'y': return False
+    if input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]').lower() != 'y': return False
     oldNav.getparent().remove(oldNav)
   mainNav  = tag('nav',{'epub:type':'page-list', 'hidden':''})
   header = tag('h1')
@@ -235,15 +259,15 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next'):
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars'):
   pub = read_epub(path)
-  # getting all documents that are not the internal EPUB3 navigation
   ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
   epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
+  # getting all documents that are not the internal EPUB3 navigation
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
   [stripText,stripSplits,docStats] = analyzeBook(docs)
-  stripPageIndex = approximatePageLocations(stripText,pages,breakMode)
+  stripPageIndex = approximatePageLocations(stripText,pages,breakMode,pageMode)
   pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
