@@ -14,7 +14,7 @@ printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc
 
 def nodeText(node:etree.ElementBase):
   if isinstance(node,etree._Comment): return ''
-  # We include list of all valid HTML tags that we want to include in our text.
+  # We include a list of all valid HTML tags that we want to include in our text.
   # If we don't filter, itertext includes the content of tags like head, meta and style, which makes no sense for our purposes.
   return ''.join([x for x in node.itertext('html','body','div','span','p','strong','em','a', 'b', 'i','h1','h2','h3','h4', 'h5','h6', 'title', 'figure', 'section','sub','ul','ol','li', 'abbr','blockquote', 'figcaption','aside','cite', 'code','pre', 'nav','tr', 'table','tbody','thead','header','th','td','math','mrow','mspace','msub','mi','mn','mo','var','mtable','mtr','mtd','mtext','msup','mfrac','msqrt','munderover','msubsup','mpadded','mphantom')])
 
@@ -39,7 +39,7 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
         inDict = next((x for x in repDict.keys() if inZipInfo.filename.endswith(x)),None)
         if inDict is not None:
           outZip.writestr(inZipInfo.filename, repDict[inDict].encode('utf-8'))
-        # copying non-changed files, saving teh manifest without compression
+        # copying non-changed files, saving the mimetype without compression
         else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED)
   print(f'succesfully saved {dest}')
   
@@ -47,7 +47,6 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
 def mapReport(a,b):
   """simple printout function for mapping progress"""
   printProgressBar(a,b,f'Mapping page {a} of {b}','Done',2)
-  pass
 
 
 def splitStr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
@@ -114,9 +113,8 @@ def nodeRanges(node:etree.ElementBase,strippedText:str = None):
   if strippedText is None: strippedText= nodeText(node)
   baseIndex = 0
   # getting all child nodes containing text.
-  withText:list[tuple[etree.ElementBase,str]] = [[x,nodeText(x)] for x in node.iter() if nodeText(x) != '']
   rangeList:list[tuple[etree.ElementBase,int,int]] = []
-  for [e,t] in withText:
+  for [e,t] in [[x,nodeText(x)] for x in node.iter() if nodeText(x) != '']:
     # finding where in our text the node is located
     myIndex = strippedText.find(t,baseIndex)
     childText = next((nodeText(x) for x in iter(e) if nodeText(x) != ''),None)
@@ -136,8 +134,7 @@ def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,
   -the distance of the location from the start of the node text\n
   -the distance of the location from the end of the node text
   """
-  matches=[[x[0], strippedLoc-x[1], x[2] - strippedLoc] for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc]
-  return matches[-1]
+  return [[x[0], strippedLoc-x[1], x[2] - strippedLoc] for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc][-1]
 
 
 def insertIntoText(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
@@ -297,7 +294,7 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
     return target
   
   body:etree.ElementBase = doc.find('x:body',xns)
-  # perhaps teh file already has a page-list navigation element
+  # perhaps the file already has a page-list navigation element
   oldNav:etree.ElementBase = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
   if(oldNav is not None): 
     if input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]').lower() != 'y': return False
