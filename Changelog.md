@@ -2,6 +2,10 @@
 
 All notable changes to the EPUP Page Approximator will be documented here.
 
+## [1.1.2]
+- Source code fully documented
+- enormous performance improvement.
+
 ## [1.1.1]
 - Added a new `pagingMode` option to allow finer control over how pages are split up.
 - fixed edge cases where page breaks could be generated outside the `body` tag of the document.

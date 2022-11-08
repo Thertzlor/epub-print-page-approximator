@@ -128,7 +128,7 @@ def nodeRanges(node:etree.ElementBase,strippedText:str = None):
 
 
 def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int]])->tuple[etree.ElementBase,int,int]:
-  """Returns node containing the specified location of strippedtext based on a list of node ranges (output from nodeRanges).\n
+  """Returns node containing the specified location of stripped text based on a list of node ranges (output from nodeRanges).\n
   The returned tuple contains:\n
   -the node itself\n
   -the distance of the location from the start of the node text\n
@@ -334,6 +334,8 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
   # we reverse the page map so we can be sure that the locations of the individual documents doesn't shift around while we're iterating.
+  currentIndex:int = None
+  currentRanges:list[tuple[etree.ElementBase, int, int]] = None
   for [i,[pg,docIndex]] in reversed(list(enumerate(pagesMapped))):
     # showing the progress bar, we unreverse the values for that of course.
     mapReport(pages-i,pages)
@@ -343,6 +345,9 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     # no need to insert a break in that case either
     if docLocation == 0: continue
     doc = docStats[docIndex]
+    if currentIndex != docIndex: 
+      currentIndex = docIndex
+      currentRanges = nodeRanges(doc)
     # making our page breaker
     breakSpan:etree.ElementBase = doc.makeelement('span')
     breakSpan.set('id',f'pg_break_{i}')
@@ -350,8 +355,8 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     breakSpan.set('value',str(i+1))
     # EPUB2 does not support the epub: namespace.
     if epub3Nav is not None:breakSpan.set('epub:type','pagebreak')
-    # recalculating ranges for every page is DEFINITELY a performance heavy but every page break does alter the coordinates within a document.
-    insertNodeAtTextPos(getNodeFromLocation(docLocation,nodeRanges(doc)),breakSpan)
+    # we don't recalculate the ranges because page breaks do not add any text.
+    insertNodeAtTextPos(getNodeFromLocation(docLocation,currentRanges),breakSpan)
     # noting the filename of every document that was modified.
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   # putting the links into the right order for inserting them into the navigation.
