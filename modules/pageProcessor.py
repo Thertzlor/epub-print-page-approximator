@@ -331,14 +331,15 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
 
 
 def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[etree.ElementBase],docs:list[EpubHtml],epub3Nav:EpubHtml):
+  """Function for mapping page locations to actual page break elements in the epub's documents."""
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
-  # We use currentOndex and currentIndex to keep track of which document ranges we need.
+  # We use currentIndex and currentIndex to keep track of which document ranges we need.
   currentIndex:int = None
   currentRanges:list[tuple[etree.ElementBase, int, int]] = None
   for [i,[pg,docIndex]] in enumerate(pagesMapped):
     # showing the progress bar
-    mapReport(i,pages)
+    mapReport(i+1,pages)
     docLocation = pg - stripSplits[docIndex]
     # Generating links. If the location is right at the start of a file we just link to the file directly
     pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}')
@@ -361,14 +362,28 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   return [pgLinks,changedDocs]
 
-
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars'):
-  """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
-  pub = read_epub(path)
+def prepareNavigations(pub)->tuple[EpubNav,EpubHtml]:
+  """Extract the Navigation files from the EPUB"""
   ncxNav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
   epub3Nav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
   # a valid EPUB will have at least one type of navigation.
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
+  return [epub3Nav,ncxNav]
+
+
+def processNavigations(epub3Nav:EpubNav,ncxNav:EpubHtml,pgLinks:list[str],repDict:dict,noNav:bool, noNcX:bool):
+  """Adding the link list to any available navigation files."""
+  if epub3Nav and not noNav: 
+    if addLinksToNav(epub3Nav,pgLinks,repDict) == False: return print('Pagination Cancelled') or False
+  if ncxNav and not noNcX: 
+     if addLinksToNcx(ncxNav,pgLinks,repDict) == False :return print('Pagination Cancelled') or False
+  return True 
+  
+
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars'):
+  """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
+  pub = read_epub(path)
+  [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
   # processing the book contents.
@@ -382,9 +397,5 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   repDict = {}
   # adding all changed documents to our dictionary of changed files
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x]).decode('utf-8')
-  if epub3Nav and not noNav: 
-    if addLinksToNav(epub3Nav,pgLinks,repDict) == False: return print('Pagination Cancelled')
-  if ncxNav and not noNcX: 
-     if addLinksToNcx(ncxNav,pgLinks,repDict) == False :return print('Pagination Cancelled')
   # finally, we save all our changed files into a new EPUB.
-  overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
+  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
