@@ -49,26 +49,29 @@ def mapReport(a,b):
 def splitstr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
 
 
+def approximatePageLocationsByLine(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars'):
+  lines:list[str]=[]
+  splits = stripped.splitlines(keepends=True)
+  if pageMode == 'lines':
+    lines= splits
+  else:
+    splitLines = [splitstr(x,pageMode) for x in splits]
+    lines = [item for sublist in splitLines for item in sublist]
+  if len(lines) < pages: raise BaseException(f'The number of detected lines in the book ({len(lines)}) is smaller than the number of pages to generate ({pages}). Consider using the "chars" paging mode for this book.')
+  lineOffset=0
+  lineLocations:list[int]=[]
+  for [i,l] in enumerate(lines):
+    lineLocations.append(lineOffset)
+    lineOffset = lineOffset + len(l)
+  
+  step = len(lines)/pages
+  pgList = [lineLocations[round(step*i)] for i in range(pages)]
+  return pgList
+
+
 def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars') -> list[int]:
-  pgList = []
-  if pageMode == 'lines' or isinstance(pageMode, int):
-    lines:list[str]=[]
-    splits = stripped.splitlines(keepends=True)
-    if pageMode == 'lines':
-      lines= splits
-    else:
-      splitLines =  [splitstr(x,pageMode) for x in splits]
-      lines = [item for sublist in splitLines for item in sublist]
-    if len(lines) < pages: raise BaseException(f'The number of detected lines in the book ({len(lines)}) is smaller than the number of pages to generate ({pages}). Consider using the "chars" paging mode for this book.')
-    lineOffset=0
-    lineLocations:list[int]=[]
-    for [i,l] in enumerate(lines):
-      lineLocations.append(lineOffset)
-      lineOffset = lineOffset + len(l)
-    
-    step = len(lines)/pages
-    pgList = [lineLocations[round(step*i)] for i in range(pages)]
-    return pgList
+  if pageMode == 'lines' or isinstance(pageMode, int): 
+    return approximatePageLocationsByLine(stripped,pages,breakMode,pageMode)
 
   pgSize = math.ceil(len(stripped)/pages)
   print(f'Calculated approximate page size of {pgSize} characters')
@@ -259,16 +262,7 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars'):
-  pub = read_epub(path)
-  ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
-  epub3Nav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
-  if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
-  # getting all documents that are not the internal EPUB3 navigation
-  docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
-  [stripText,stripSplits,docStats] = analyzeBook(docs)
-  stripPageIndex = approximatePageLocations(stripText,pages,breakMode,pageMode)
-  pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
+def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[etree.ElementBase],docs:list[EpubHtml],epub3Nav:EpubHtml):
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
   for [i,[pg,docIndex]] in reversed(list(enumerate(pagesMapped))):
@@ -287,6 +281,20 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
     insertNodeAtTextPos(getNodeFromLocation(docLocation,nodeRanges(doc)),breakSpan)
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   pgLinks.reverse()
+  return [pgLinks,changedDocs]
+
+
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars'):
+  pub = read_epub(path)
+  ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
+  epub3Nav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
+  if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
+  # getting all documents that are not the internal EPUB3 navigation
+  docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
+  [stripText,stripSplits,docStats] = analyzeBook(docs)
+  stripPageIndex = approximatePageLocations(stripText,pages,breakMode,pageMode)
+  pagesMapped:list[tuple[int,int]] = [[x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] for x in stripPageIndex]
+  [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav)
   repDict = {}
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x]).decode('utf-8')
   if epub3Nav and not noNav: 
