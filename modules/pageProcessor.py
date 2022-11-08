@@ -201,7 +201,7 @@ def addListToNcx(ncx:EpubItem,linkList:list[str],repDict:dict={}):
   def makeLabel(text:str|int):
     label = tag('navLabel')
     txt = tag('text')
-    txt.text = str(text);
+    txt.text = str(text)
     label.append(txt)
     return label
   def makeTarget(number:int,offset=0):
@@ -217,7 +217,7 @@ def addListToNcx(ncx:EpubItem,linkList:list[str],repDict:dict={}):
   genList.append(makeLabel('Pages'))
   for i in range(len(linkList)): genList.append(makeTarget(i,1))
   doc.append(genList)
-  ncxString:str =  etree.tostring(doc)
+  ncxString:str = etree.tostring(doc)
   repDict[ncx.file_name] = ncxString.decode('utf-8').replace('<pageTarget','\n<pageTarget')
   return True
 
@@ -236,7 +236,7 @@ def addListToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   if(oldNav is not None): 
     if input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]').lower() != 'y': return False
     oldNav.getparent().remove(oldNav)
-  mainNav  = tag('nav',{'epub:type':'page-list', 'hidden':''})
+  mainNav = tag('nav',{'epub:type':'page-list', 'hidden':''})
   header = tag('h1')
   header.text='List of Pages'
   mainNav.append(header)
@@ -244,7 +244,7 @@ def addListToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   for i in range(len(linkList)): lst.append(makeTarget(i,1))
   mainNav.append(lst)
   body.append(mainNav)
-  navString:str =  etree.tostring(doc)
+  navString:str = etree.tostring(doc)
   repDict[nav.file_name] = navString.decode('utf-8').replace('<li','\n<li')
   return True
 
@@ -262,7 +262,7 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
 def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars'):
   pub = read_epub(path)
   ncxNav:EpubItem = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
-  epub3Nav:EpubHtml =  next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
+  epub3Nav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
   # getting all documents that are not the internal EPUB3 navigation
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
@@ -279,7 +279,7 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
     # no need to insert a break in this case either
     if docLocation == 0: continue
     doc = docStats[docIndex]
-    breakSpan:etree.ElementBase =  doc.makeelement('span')
+    breakSpan:etree.ElementBase = doc.makeelement('span')
     breakSpan.set('id',f'pg_break_{i}')
     breakSpan.set('value',str(i+1))
     # EPUB2 does not support the epub: namespace.
