@@ -6,12 +6,14 @@ from ebooklib.epub import EpubHtml, EpubNav, Link, etree, read_epub, zipfile
 
 
 def pageIdPattern(num:int,prefix = 'pg_break_'):
+  """Just a quick utility function to generate link IDs"""
   return f'{prefix}{num}'
 
 printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc)]
 
 def nodeText(node:etree.ElementBase):
   if isinstance(node,etree._Comment): return ''
+  # A list of all 
   return ''.join([x for x in node.itertext('html','body','div','span','p','strong','em','a', 'b', 'i','h1','h2','h3','h4', 'h5','h6', 'title', 'figure', 'section','sub','ul','ol','li', 'abbr','blockquote', 'figcaption','aside','cite', 'code','pre', 'nav','tr', 'table','tbody','thead','header','th','td','math','mrow','mspace','msub','mi','mn','mo','var','mtable','mtr','mtd','mtext','msup','mfrac','msqrt','munderover','msubsup','mpadded','mphantom')])
 
 def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
@@ -35,7 +37,8 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
         inDict = next((x for x in repDict.keys() if inZipInfo.filename.endswith(x)),None)
         if inDict is not None:
           outZip.writestr(inZipInfo.filename, repDict[inDict].encode('utf-8'))
-        else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED) # Other file, dont want to modify => just copy it
+        # copying non-changed files, saving teh manifest without compression
+        else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED)
   print(f'succesfully saved {dest}')
   
 
@@ -48,110 +51,145 @@ def mapReport(a,b):
 def splitstr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
 
 
-def approximatePageLocationsByLine(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars'):
+def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int):
+  """Splitting up the stripped text of the book by number of lines. Takes 'lines' or a maximum line length as its pageMode parameter. """
   lines:list[str]=[]
+  # initial split
   splits = stripped.splitlines(keepends=True)
   if pageMode == 'lines':
+    # in the simple 'lines' mode we don't care about the length of the lines
     lines= splits
   else:
+    # splitting up all lines above the maximum length
     splitLines = [splitstr(x,pageMode) for x in splits]
+    # flattening our list of split up strings back into a regular list of strings
     lines = [item for sublist in splitLines for item in sublist]
+  # This should only seldomly happen, but best to be prepared.
   if len(lines) < pages: raise BaseException(f'The number of detected lines in the book ({len(lines)}) is smaller than the number of pages to generate ({pages}). Consider using the "chars" paging mode for this book.')
   lineOffset=0
   lineLocations:list[int]=[]
-  for [i,l] in enumerate(lines):
+  # for most of the splitting we don't care about text content, just locations.
+  for l in lines:
     lineLocations.append(lineOffset)
     lineOffset = lineOffset + len(l)
-  
+  # calculating the number of lines per page.
   step = len(lines)/pages
+  # step is a float, so we round it to get a valid index.
   pgList = [lineLocations[round(step*i)] for i in range(pages)]
   return pgList
 
 
 def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars') -> list[int]:
-  if pageMode == 'lines' or isinstance(pageMode, int): 
-    return approximatePageLocationsByLine(stripped,pages,breakMode,pageMode)
+  """Generate a list of page break locations based on the chosen page number and paging mode."""
+  if pageMode == 'lines' or isinstance(pageMode, int):
+    # taking care of the 'lines' paging mode
+    return approximatePageLocationsByLine(stripped,pages,pageMode)
 
   pgSize = floor(len(stripped)/pages)
   print(f'Calculated approximate page size of {pgSize} characters')
+  # The initial locations for our page splits are simply multiples of the page size
   pgList = [i*pgSize for i in range(pages)]
+  # the 'split' break mode does not care about breaking pages in the middle of a word, so nothing needs to be done.
   if breakMode == 'split': return pgList
   for [i,p] in enumerate(pgList):
+    # getting the text of the current page.
     page = stripped[p:p+pgSize]
+    # the 'prev' mode uses the same operations as the 'next' mode, just on the reversed string.
     if breakMode == 'prev': page = page[::-1]
+    # finding the next/previous whitespace character.
     nextSpace = search(r'\s',page)
+    # If we don't find any whitespace we just leave the break where it is.
     if nextSpace is not None: 
-      pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1)) 
+      # in the 'prev' mode we need to subtract the index we found.
+      pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
   return pgList
 
 
 def nodeRanges(node:etree.ElementBase,strippedText:str = None):
   """Receives a node and optionally the stripped text of that node.\n
-  Returns a List of tuples, each consisting of a child element, offsets for where its text content starts and ends as well as the text itself
+  Returns a List of tuples, each consisting of a child element and offsets for where its text content starts and ends.
   """
   if strippedText is None: strippedText= nodeText(node)
   baseIndex = 0
+  # getting all child nodes containing text.
   withText:list[tuple[etree.ElementBase,str]] = [[x,nodeText(x)] for x in node.iter() if nodeText(x) != '']
-  rangeList:list[tuple[etree.ElementBase,int,int,str]] = []
+  rangeList:list[tuple[etree.ElementBase,int,int]] = []
   for [e,t] in withText:
+    # finding where in our text the node is located
     myIndex = strippedText.find(t,baseIndex)
     childText = next((nodeText(x) for x in iter(e) if nodeText(x) != ''),None)
+    # we skip elements that don't have text outside of their child elements.
     if childText == t: continue
-    rangeList.append([e,myIndex,myIndex+len(t),t])
+    # saving the list entry.
+    rangeList.append([e,myIndex,myIndex+len(t)])
+    # advancing in our base string, this is how we guarantee identical node text matching the correct child.
     if childText is None: baseIndex = myIndex + len(t)
   return rangeList
 
 
-def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int,str]])->tuple[etree.ElementBase,int,int]:
+def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int]])->tuple[etree.ElementBase,int,int]:
   """Returns node containing the specified location of strippedtext based on a list of node ranges (output from nodeRanges).\n
   The returned tuple contains:\n
   -the node itself\n
   -the distance of the location from the start of the node text\n
-  -the distance of the location from the end of the node text\n
+  -the distance of the location from the end of the node text
   """
   matches=[[x[0], strippedLoc-x[1], x[2] - strippedLoc] for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc]
   return matches[-1]
 
 
 def insertIntoText(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
+  """Inserting a node into a specific index of another node's text content.
+  necessary because insert(0) will always put it after the text."""
   newText = parentNode.text[0:strippedLoc]
+  # only the first part of the text will still belong to the parent, the other part becomes the new node's tail
   newTail = parentNode.text[strippedLoc:]
   parentNode.text = newText
+  # We are only inserting page breaks, so we don't need to worry about overriding existing tail data.
   newNode.tail = newTail
+  # insert at first position
   parentNode.insert(0,newNode)
 
 
 def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
+  """Inserting a node into a specific index of another node's text content.
+  necessary because insert(-1) will always put it before the tail"""
   if parentNode.tag is not None:
+    # we do not want to put anything outside the body tag, in that case we insert it at the end.
     if parentNode.tag.lower() == 'body': return parentNode.insert(-1,newNode)
     if parentNode.tag.lower() == 'html': return parentNode.find('x:body',xns).insert(-1,newNode)
 
   newParentTail = parentNode.tail[0:strippedLoc]
   newChildTail = parentNode.tail[strippedLoc:]
-  #deleting zhe old tail, or else it will be added twice
+  #deleting the old tail, or else it will be added twice
   parentNode.tail=''
   newNode.tail = newChildTail
   parentNode.addnext(newNode)
-  #setting the new tail
+  #setting the new tail, needs to happen after insertion.
   parentNode.tail = newParentTail
 
 
 def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int],newNode:etree.ElementBase):
-  """Takes a node position object (output from getNodeFromLocation)"""
+  """Takes a node position object (output from getNodeFromLocation()) and inserts a new node at that spot."""
   [el,fromStart,fromEnd] = positionData
+  # in some cases we can simply use the tail or text insertion functions directly.
   if el.text is not None and len(el.text) > fromStart: return insertIntoText(newNode,el,fromStart)
   if el.tail is not None and len(el.tail) > fromEnd: return insertIntoTail(newNode,el,len(el.tail)-fromEnd)
   offset = 0 if el.text is None else len(el.text)
+  # basically we only get to this part if there's multiple child elements and our node needs to go in the middle.
   for c in el:
+    # skipping the content of the child node, we already know our location can't be inside.
     offset = offset+len(nodeText(c) or '')+len(c.tail or '')
+    # The location can only be the tail of one of the child nodes, once we find it, we insert the node.
     if fromStart < offset: return insertIntoTail(newNode,c,len(c.tail or '') - (offset-fromStart))
+  # Something has gone very wrong if we don't find any viable location, so we print a warning.
   print('could not find insertion spot',fromStart,fromEnd)
 
 
 def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBase]]:
-  """Extract the full text content of an ebook, one string containing the full HTML, one containing only the text
-  and one list of xml documents"""
+  """Extract the full text content of an ebook, outputs the text stripped of HTML, a list of document locations within that string and one list of xml documents"""
   htmStrings:list[str] = [x.content for x in docs]
+
   htmDocs: list[etree.ElementBase] = [etree.fromstring(x,etree.HTMLParser()) for x in htmStrings]
   stripStrings:list[str] = [nodeText(x) for x in htmDocs]
   stripSplits:list[int]=[0]
@@ -165,6 +203,7 @@ def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBas
 
 
 def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,htmSplits:list[int],strippedSplits:list[int]):
+  """**NOT YET IMPLEMENTED**"""
   links:list[str] = [x.href for x in toc]
   locations:list[int] = []
   for [i,l] in enumerate(links):
@@ -264,29 +303,38 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
 def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[etree.ElementBase],docs:list[EpubHtml],epub3Nav:EpubHtml):
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
+  # we reverse the page map so we can be sure that the locations of the individual documents doesn't shift around while we're iterating.
   for [i,[pg,docIndex]] in reversed(list(enumerate(pagesMapped))):
+    # showing the progress bar, we unreverse the values for that of course.
     mapReport(pages-i,pages)
     docLocation = pg - stripSplits[docIndex]
-    #if the location is right at teh start of a file we just lnk to the file directly
+    # Generating links. If the location is right at the start of a file we just link to the file directly
     pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}')
-    # no need to insert a break in this case either
+    # no need to insert a break in that case either
     if docLocation == 0: continue
     doc = docStats[docIndex]
+    # making our page breaker
     breakSpan:etree.ElementBase = doc.makeelement('span')
     breakSpan.set('id',f'pg_break_{i}')
+    # page breaks don't have text, but they do have a value.
     breakSpan.set('value',str(i+1))
     # EPUB2 does not support the epub: namespace.
     if epub3Nav is not None:breakSpan.set('epub:type','pagebreak')
+    # recalculating ranges for every page is DEFINITELY a performance heavy but every page break does alter the coordinates within a document.
     insertNodeAtTextPos(getNodeFromLocation(docLocation,nodeRanges(doc)),breakSpan)
+    # noting the filename of every document that was modified.
     if docIndex not in changedDocs: changedDocs.append(docIndex)
+  # putting the links into the right order for inserting them into the navigation.
   pgLinks.reverse()
   return [pgLinks,changedDocs]
 
 
 def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars'):
+  """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   pub = read_epub(path)
   ncxNav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
   epub3Nav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
+  # a valid EPUB will have at least one type of navigation.
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
   # getting all documents that are not the internal EPUB3 navigation
   docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
