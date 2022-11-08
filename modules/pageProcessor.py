@@ -265,7 +265,7 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
   pList:etree.ElementBase = doc.find('x:pageList',xns)
   # the ncx file might already have a pageList element.
   if(pList is not None): 
-    if input('EPUB NCX already has a pageList element.\nContinue and overwrite it? [y/N]').lower() != 'y': return False
+    if input('EPUB NCX already has a pageList element.\nContinue and overwrite it? [y/N]:').lower() != 'y': return False
     # getting rid of the old element
     pList.getparent().remove(pList)
   # the new tag we are inserting
@@ -297,7 +297,7 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   # perhaps the file already has a page-list navigation element
   oldNav:etree.ElementBase = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
   if(oldNav is not None): 
-    if input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]').lower() != 'y': return False
+    if input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]:').lower() != 'y': return False
     # getting rid of the old element
     oldNav.getparent().remove(oldNav)
   # generating a new navigation tag for our list and hiding it.
