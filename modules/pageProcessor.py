@@ -333,12 +333,12 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
 def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[etree.ElementBase],docs:list[EpubHtml],epub3Nav:EpubHtml):
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
-  # we reverse the page map so we can be sure that the locations of the individual documents doesn't shift around while we're iterating.
+  # We use currentOndex and currentIndex to keep track of which document ranges we need.
   currentIndex:int = None
   currentRanges:list[tuple[etree.ElementBase, int, int]] = None
-  for [i,[pg,docIndex]] in reversed(list(enumerate(pagesMapped))):
-    # showing the progress bar, we unreverse the values for that of course.
-    mapReport(pages-i,pages)
+  for [i,[pg,docIndex]] in enumerate(pagesMapped):
+    # showing the progress bar
+    mapReport(i,pages)
     docLocation = pg - stripSplits[docIndex]
     # Generating links. If the location is right at the start of a file we just link to the file directly
     pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}')
@@ -359,8 +359,6 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     insertNodeAtTextPos(getNodeFromLocation(docLocation,currentRanges),breakSpan)
     # noting the filename of every document that was modified.
     if docIndex not in changedDocs: changedDocs.append(docIndex)
-  # putting the links into the right order for inserting them into the navigation.
-  pgLinks.reverse()
   return [pgLinks,changedDocs]
 
 
