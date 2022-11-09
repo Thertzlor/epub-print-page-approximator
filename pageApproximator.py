@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from re import search
 
-from modules.pageProcessor import processEPUB
+from modules.pageprocessor import processEPUB
 
 parser = ArgumentParser(description='Print Page Approximator for EPUB and EPUB3',prog='Print Page Approximator')
 parser.add_argument('filepath',type=str, help='Path to the EPUB file you wish to paginate')
