@@ -9,8 +9,22 @@ def pageIdPattern(num:int,prefix = 'pg_break_'):
   """Just a quick utility function to generate link IDs"""
   return f'{prefix}{num}'
 
-printToc = lambda b : [print(f'{x[0]+1}. {x[1].title}') for x in enumerate(b.toc)]
-"""Output all entries of a table of contents to the console. Not used yet."""
+def printToc(b:list,indent='', offset = 1):
+  """Output all entries of a table of contents to the console."""
+  for t in b:
+    if isinstance (t,list) or isinstance(t,tuple): offset = printToc(t,f'{indent}  ',offset)
+    else: 
+      print(f'{offset}. {indent}{t.title} - {t.href}')
+      offset = offset +1
+  return offset
+
+def flattenToc(b:list,links:list[str]=[]):
+  """Output all entries of a table of contents to the console."""
+  for t in b:
+    if isinstance (t,list) or isinstance(t,tuple): flattenToc(t,links)
+    else: links.append(t.href)
+
+  return links
 
 def nodeText(node:etree.ElementBase):
   if isinstance(node,etree._Comment): return ''
@@ -44,9 +58,10 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
   print(f'succesfully saved {dest}')
   
 
-def mapReport(a,b):
+def mapReport(a,b, t='Mapping page'):
   """simple printout function for mapping progress"""
-  printProgressBar(a,b,f'Mapping page {a} of {b}','Done',2)
+  printProgressBar(a,b,f'{t} {a} of {b}','Done',2)
+  return True
 
 
 def splitStr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
@@ -114,17 +129,25 @@ def nodeRanges(node:etree.ElementBase,strippedText:str = None):
   baseIndex = 0
   # getting all child nodes containing text.
   rangeList:list[tuple[etree.ElementBase,int,int]] = []
-  for [e,t] in [[x,nodeText(x)] for x in node.iter() if nodeText(x) != '']:
+  idLocations:dict[str,int]={}
+  def addId(element:etree.ElementBase,idx:int):
+    elId = element.get('id')
+    if elId: idLocations[elId] = idx
+  for (e,t) in tuple((x,nodeText(x)) for x in node.iter()):
     # finding where in our text the node is located
+    if t == '': 
+      addId(e,baseIndex)
+      continue
     myIndex = strippedText.find(t,baseIndex)
+    addId(e,myIndex)
     childText = next((nodeText(x) for x in iter(e) if nodeText(x) != ''),None)
     # we skip elements that don't have text outside of their child elements.
     if childText == t: continue
     # saving the list entry.
-    rangeList.append([e,myIndex,myIndex+len(t)])
+    rangeList.append((e,myIndex,myIndex+len(t)))
     # advancing in our base string, this is how we guarantee identical node text matching the correct child.
     if childText is None: baseIndex = myIndex + len(t)
-  return rangeList
+  return (rangeList,idLocations)
 
 
 def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int]]):
@@ -134,7 +157,7 @@ def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,
   -the distance of the location from the start of the node text\n
   -the distance of the location from the end of the node text
   """
-  return [(x[0], strippedLoc-x[1], x[2] - strippedLoc) for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc][-1]
+  return tuple((x[0], strippedLoc-x[1], x[2] - strippedLoc) for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc)[-1]
 
 
 def insertIntoText(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
@@ -187,33 +210,35 @@ def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int],newNode:et
 
 def analyzeBook(docs:list[EpubHtml]):
   """Extract the full text content of an ebook, outputs the text stripped of HTML, a list of document locations within that string and one list of xml documents"""
-  htmStrings:list[str] = [x.content for x in docs]
+  numDocs=len(docs)
+  htmStrings:list[str] = tuple(x.content for x in docs)
   # getting all documents.
-  htmDocs: list[etree.ElementBase] = [etree.fromstring(x,etree.HTMLParser()) for x in htmStrings]
+  htmDocs: list[etree.ElementBase] = tuple(etree.fromstring(x,etree.HTMLParser()) for x in htmStrings)
   # extracting all text.
   stripStrings:list[str] = [nodeText(x) for x in htmDocs]
-  stripSplits:list[int]=[0]
+  htmRanges = tuple(nodeRanges(x,stripStrings[i]) for (i,x) in enumerate(htmDocs) if mapReport(i+1,numDocs,'Parsing HTML'))
+  stripSplits=[0]
   currentStripSplit = 0
   for string in stripStrings:
     currentStripSplit = currentStripSplit + len(string or '')
     # saving where each separate document starts within the text.
     stripSplits.append(currentStripSplit)
-  return (''.join(stripStrings),stripSplits,htmDocs)
+  return (''.join(stripStrings),stripSplits,tuple((x,htmRanges[i][0],htmRanges[i][1]) for [i,x] in enumerate(htmDocs)))
 
 
-def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,htmSplits:list[int],strippedSplits:list[int]):
-  """**NOT YET IMPLEMENTED**"""
-  links:list[str] = [x.href for x in toc]
+def getTocLocations(toc:list,docs:list[EpubHtml],strippedSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]]):
+  links:list[str] = flattenToc(toc)
   locations:list[int] = []
-  for [i,l] in enumerate(links):
-    anchored = '#' in l
-    [doc,id] = (l.split('#') if anchored else [l,None])
-    [target,index] = next((x for x in enumerate(docs) if x[1].file_name == doc),[None,None])
-    if target is None: raise LookupError('Table of Contents contains link to nonexistent documents.')
+  for link in links:
+    anchored = '#' in link
+    [doc,id] = (link.split('#') if anchored else [link,None])
+    index = next((idx for (idx,pubDoc) in enumerate(docs) if pubDoc.file_name == doc),None)
+    if index is None: raise LookupError(f'Table of Contents contains link to nonexistent document "{doc}".')
     if id is None: locations.append(strippedSplits[index])
     else:
-      splitEnd = len(rawText) if i == len(htmSplits) else htmSplits[i+1]
-      docText = rawText[htmSplits[i]:splitEnd]
+      [_,_,idLocations] = docStats[index]
+      if id not in idLocations: LookupError(f'Table of Contents contains link to nonexistent element id "{id}" in "{doc}".')
+      locations.append(strippedSplits[index]+idLocations[id])
   return locations
 
 
@@ -225,7 +250,7 @@ def between (str,pos,around,sep='|'):
 
 def relativePath(pathA:str,pathB:str):
   """A function to adjust link paths in case the navigation and content documents are in the same path."""
-  [splitA,splitB] = [x.split('/') for x in[pathA,pathB]]
+  [splitA,splitB] = tuple(x.split('/') for x in (pathA,pathB))
   pathDiff=0
   # comparing each path section of our files.
   for [i,s] in enumerate(splitA):
@@ -330,25 +355,20 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
   return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
 
 
-def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[etree.ElementBase],docs:list[EpubHtml],epub3Nav:EpubHtml):
+def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={}):
   """Function for mapping page locations to actual page break elements in the epub's documents."""
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
   # We use currentIndex and currentIndex to keep track of which document ranges we need.
-  currentIndex:int = None
-  currentRanges:list[tuple[etree.ElementBase, int, int]] = None
   for [i,[pg,docIndex]] in enumerate(pagesMapped):
     # showing the progress bar
     mapReport(i+1,pages)
     docLocation = pg - stripSplits[docIndex]
     # Generating links. If the location is right at the start of a file we just link to the file directly
-    pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}')
+    [doc,docRanges,_] = docStats[docIndex]
+    pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i) if i not in knownPages else knownPages[i]}')
     # no need to insert a break in that case either
     if docLocation == 0: continue
-    doc = docStats[docIndex]
-    if currentIndex != docIndex: 
-      currentIndex = docIndex
-      currentRanges = nodeRanges(doc)
     # making our page breaker
     breakSpan:etree.ElementBase = doc.makeelement('span')
     breakSpan.set('id',f'pg_break_{i}')
@@ -357,7 +377,7 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     # EPUB2 does not support the epub: namespace.
     if epub3Nav is not None:breakSpan.set('epub:type','pagebreak')
     # we don't recalculate the ranges because page breaks do not add any text.
-    insertNodeAtTextPos(getNodeFromLocation(docLocation,currentRanges),breakSpan)
+    insertNodeAtTextPos(getNodeFromLocation(docLocation,docRanges),breakSpan)
     # noting the filename of every document that was modified.
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   return [pgLinks,changedDocs]
@@ -385,17 +405,17 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   pub = read_epub(path)
   [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
-  docs = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
+  docs = tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml))
   # processing the book contents.
   [stripText,stripSplits,docStats] = analyzeBook(docs)
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
-  pagesMapped = [
+  pagesMapped = tuple(
     (x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x))
     for x in approximatePageLocations(stripText,pages,breakMode,pageMode)
-  ]
+  )
   [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav)
   repDict = {}
   # adding all changed documents to our dictionary of changed files
-  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x]).decode('utf-8')
+  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0]).decode('utf-8')
   # finally, we save all our changed files into a new EPUB.
   if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
