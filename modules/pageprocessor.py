@@ -8,7 +8,7 @@ from modules.helperfunctions import mapReport, overrideZip, splitStr
 from modules.navutils import prepareNavigations, processNavigations
 from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
-from modules.tocutils import checkToC, getTocLocations, printToc
+from modules.tocutils import checkToC
 
 
 def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,offset=0):

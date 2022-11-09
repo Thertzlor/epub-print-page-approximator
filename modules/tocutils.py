@@ -20,6 +20,7 @@ def flattenToc(b:list,links:list[str]=[]):
   return links
 
 def checkToC(toc:list,mapping:list[int]):
+  """Check"""
   if len(flattenToc(toc)) == len(mapping): return True
   print('The manual chapter map must have the same number of entries as the Table of Contents of the ebook.\n The current ToC Data has the following entries:')
   printToc(toc)
@@ -39,6 +40,6 @@ def getTocLocations(toc:list,docs:list[EpubHtml],stripSplits:list[int],docStats:
       [_,_,idLocations] = docStats[index]
       try:
         locations.append((link,stripSplits[index]+idLocations[id]))
-      except:
+      except Exception:
         print(f'could not locate id {id} in document {doc}.')
   return locations
