@@ -127,14 +127,14 @@ def nodeRanges(node:etree.ElementBase,strippedText:str = None):
   return rangeList
 
 
-def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int]])->tuple[etree.ElementBase,int,int]:
+def getNodeFromLocation(strippedLoc:int,ranges:list[tuple[etree.ElementBase,int,int]]):
   """Returns node containing the specified location of stripped text based on a list of node ranges (output from nodeRanges).\n
   The returned tuple contains:\n
   -the node itself\n
   -the distance of the location from the start of the node text\n
   -the distance of the location from the end of the node text
   """
-  return [[x[0], strippedLoc-x[1], x[2] - strippedLoc] for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc][-1]
+  return [(x[0], strippedLoc-x[1], x[2] - strippedLoc) for x in ranges if x[1] <= strippedLoc and x[2] > strippedLoc][-1]
 
 
 def insertIntoText(newNode:etree.ElementBase,parentNode:etree.ElementBase,strippedLoc:int):
@@ -185,7 +185,7 @@ def insertNodeAtTextPos(positionData:tuple[etree.ElementBase,int,int],newNode:et
   print('could not find insertion spot',fromStart,fromEnd)
 
 
-def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBase]]:
+def analyzeBook(docs:list[EpubHtml]):
   """Extract the full text content of an ebook, outputs the text stripped of HTML, a list of document locations within that string and one list of xml documents"""
   htmStrings:list[str] = [x.content for x in docs]
   # getting all documents.
@@ -198,7 +198,7 @@ def analyzeBook(docs:list[EpubHtml])-> tuple[str,list[int],list[etree.ElementBas
     currentStripSplit = currentStripSplit + len(string or '')
     # saving where each separate document starts within the text.
     stripSplits.append(currentStripSplit)
-  return [''.join(stripStrings),stripSplits,htmDocs]
+  return (''.join(stripStrings),stripSplits,htmDocs)
 
 
 def getTocLocations(toc:list[Link],docs:list[EpubHtml],rawText:str,htmSplits:list[int],strippedSplits:list[int]):
@@ -362,13 +362,13 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   return [pgLinks,changedDocs]
 
-def prepareNavigations(pub)->tuple[EpubNav,EpubHtml]:
+def prepareNavigations(pub):
   """Extract the Navigation files from the EPUB"""
   ncxNav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
   epub3Nav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)
   # a valid EPUB will have at least one type of navigation.
   if ncxNav is None and epub3Nav is None: raise LookupError('No navigation files found in EPUB, file probably is not valid.')
-  return [epub3Nav,ncxNav]
+  return (epub3Nav,ncxNav)
 
 
 def processNavigations(epub3Nav:EpubNav,ncxNav:EpubHtml,pgLinks:list[str],repDict:dict,noNav:bool, noNcX:bool):
@@ -385,12 +385,12 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   pub = read_epub(path)
   [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
-  docs:list[EpubHtml] = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
+  docs = [x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)]
   # processing the book contents.
   [stripText,stripSplits,docStats] = analyzeBook(docs)
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
-  pagesMapped:list[tuple[int,int]] = [
-    [x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x)] 
+  pagesMapped = [
+    (x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x))
     for x in approximatePageLocations(stripText,pages,breakMode,pageMode)
   ]
   [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav)
