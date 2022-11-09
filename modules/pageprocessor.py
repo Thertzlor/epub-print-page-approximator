@@ -8,7 +8,7 @@ from modules.helperfunctions import mapReport, overrideZip, splitStr
 from modules.navutils import prepareNavigations, processNavigations
 from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
-from modules.tocutils import checkToC
+from modules.tocutils import checkToC, processToC
 
 
 def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,offset=0):
@@ -38,6 +38,17 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
   pgList = [lineLocations[round(step*i)] for i in range(pages)]
   return pgList if offset == 0 else [p+offset for p in pgList]
 
+def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars'):
+  pageLocations:list[int] = []
+  processedPages = 0
+  for [start,end,numPages] in ranges: 
+    pageLocations = pageLocations + approximatePageLocations(stripText[start:end],numPages,breakMode,pageMode,start)
+    processedPages = processedPages + numPages
+  lastRange = ranges[-1]
+  pagesRemaining =  pages - processedPages
+  print(pagesRemaining,lastRange)
+  if pagesRemaining != 0: pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
+  return pageLocations
 
 def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0) -> list[int]:
   """Generate a list of page break locations based on the chosen page number and paging mode."""
@@ -46,7 +57,7 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
     return approximatePageLocationsByLine(stripped,pages,pageMode,offset)
 
   pgSize = floor(len(stripped)/pages)
-  print(f'Calculated approximate page size of {pgSize} characters')
+  if offset == 0: print(f'Calculated approximate page size of {pgSize} characters')
   # The initial locations for our page splits are simply multiples of the page size
   pgList = [i*pgSize for i in range(pages)]
   # the 'split' break mode does not care about breaking pages in the middle of a word, so nothing needs to be done.
@@ -76,7 +87,7 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     docLocation = pg - stripSplits[docIndex]
     # Generating links. If the location is right at the start of a file we just link to the file directly
     [doc,docRanges,_] = docStats[docIndex]
-    pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i) if i not in knownPages else knownPages[i]}')
+    pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}' if i not in knownPages else knownPages[i])
     # no need to insert a break in that case either
     if docLocation == 0: continue
     # making our page breaker
@@ -93,7 +104,7 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
   return [pgLinks,changedDocs]
   
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:list[int]=[]):
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=()):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   pub = read_epub(path)
   useToc = len(tocMap) != 0
@@ -105,11 +116,12 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   [stripText,stripSplits,docStats] = getBookContent(docs)
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   knownPages:dict[int,str] = {}
-  pagesMapped = tuple(
-    (x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x))
-    for x in approximatePageLocations(stripText,pages,breakMode,pageMode)
-  )
-  [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav)
+  pageLocations:list[int]
+  if useToc: pageLocations = approximatePageLocationsByRanges(processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats),stripText,pages,breakMode,pageMode)
+  else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode)
+  # return print(len(pageLocations),pageLocations)
+  pagesMapped = tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) for pg in pageLocations)
+  [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav,knownPages)
   repDict = {}
   # adding all changed documents to our dictionary of changed files
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0]).decode('utf-8')

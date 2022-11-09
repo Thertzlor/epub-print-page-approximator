@@ -19,6 +19,7 @@ def flattenToc(b:list,links:list[str]=[]):
 
   return links
 
+
 def checkToC(toc:list,mapping:list[int]):
   """Check"""
   if len(flattenToc(toc)) == len(mapping): return True
@@ -43,3 +44,18 @@ def getTocLocations(toc:list,docs:list[EpubHtml],stripSplits:list[int],docStats:
       except Exception:
         print(f'could not locate id {id} in document {doc}.')
   return locations
+
+
+def processToC(toc:list,mapping:list[int],knownPages:dict[int,str],docs:list[EpubHtml],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]]):
+  tocData = getTocLocations(toc,docs,stripSplits,docStats)
+  pageOffset = 0
+  textOffset=0
+  pageRanges: list[tuple[int,int,int]] = []
+  for [i,page] in enumerate(mapping):
+    if page == 0: continue
+    [link,textLocation] = tocData[i]
+    knownPages[page] = link
+    pageRanges.append((textOffset,textLocation,page-pageOffset))
+    pageOffset = page
+    textOffset = textLocation
+  return pageRanges
