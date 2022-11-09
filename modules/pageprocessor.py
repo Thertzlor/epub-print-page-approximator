@@ -63,6 +63,7 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
       pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
   return pgList
 
+
 def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={}):
   """Function for mapping page locations to actual page break elements in the epub's documents."""
   changedDocs:list[str] = []

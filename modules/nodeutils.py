@@ -88,6 +88,7 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   repDict[nav.file_name] = etree.tostring(doc).decode('utf-8').replace('<li','\n<li')
   return True
 
+
 def nodeRanges(node:etree.ElementBase,strippedText:str = None):
   """Receives a node and optionally the stripped text of that node.\n
   Returns a List of tuples, each consisting of a child element and offsets for where its text content starts and ends.
@@ -173,6 +174,7 @@ def insertAtPosition(positionData:tuple[etree.ElementBase,int,int],newNode:etree
     if fromStart < offset: return insertIntoTail(newNode,c,len(c.tail or '') - (offset-fromStart))
   # Something has gone very wrong if we don't find any viable location, so we print a warning.
   print('could not find insertion spot',fromStart,fromEnd)
+
 
 def getBookContent(docs:list[EpubHtml]):
   """Extract the full text content of an ebook, outputs the text stripped of HTML, a list of document locations within that string and one list of xml documents"""
