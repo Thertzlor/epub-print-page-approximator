@@ -8,6 +8,7 @@ from modules.helperfunctions import mapReport, overrideZip, splitStr
 from modules.navutils import prepareNavigations, processNavigations
 from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
+from modules.tocutils import checkToC, getTocLocations, printToc
 
 
 def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,offset=0):
@@ -92,15 +93,18 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
   return [pgLinks,changedDocs]
   
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars'):
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:list[int]=[]):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   pub = read_epub(path)
+  useToc = len(tocMap) != 0
+  if useToc and checkToC(pub.toc,tocMap) == False: return
   [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
   docs = tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml))
   # processing the book contents.
   [stripText,stripSplits,docStats] = getBookContent(docs)
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
+  knownPages:dict[int,str] = {}
   pagesMapped = tuple(
     (x,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > x))
     for x in approximatePageLocations(stripText,pages,breakMode,pageMode)
