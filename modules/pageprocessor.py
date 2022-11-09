@@ -10,7 +10,7 @@ from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
 
 
-def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int):
+def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,offset=0):
   """Splitting up the stripped text of the book by number of lines. Takes 'lines' or a maximum line length as its pageMode parameter. """
   lines:list[str]=[]
   # initial split
@@ -35,14 +35,14 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int):
   step = len(lines)/pages
   # step is a float, so we round it to get a valid index.
   pgList = [lineLocations[round(step*i)] for i in range(pages)]
-  return pgList
+  return pgList if offset == 0 else [p+offset for p in pgList]
 
 
-def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars') -> list[int]:
+def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0) -> list[int]:
   """Generate a list of page break locations based on the chosen page number and paging mode."""
   if pageMode == 'lines' or isinstance(pageMode, int):
     # taking care of the 'lines' paging mode
-    return approximatePageLocationsByLine(stripped,pages,pageMode)
+    return approximatePageLocationsByLine(stripped,pages,pageMode,offset)
 
   pgSize = floor(len(stripped)/pages)
   print(f'Calculated approximate page size of {pgSize} characters')
@@ -61,7 +61,7 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
     if nextSpace is not None: 
       # in the 'prev' mode we need to subtract the index we found.
       pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
-  return pgList
+  return pgList if offset == 0 else [p+offset for p in pgList]
 
 
 def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={}):

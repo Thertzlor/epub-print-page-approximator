@@ -2,3 +2,7 @@
 .vscode
 *.exe
 **/__pycache__
+.VSCodeCounter
+build
+dist
+*.spec

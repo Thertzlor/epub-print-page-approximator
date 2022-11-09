@@ -31,6 +31,8 @@ def getTocLocations(toc:list,docs:list[EpubHtml],strippedSplits:list[int],docSta
     if id is None: locations.append(strippedSplits[index])
     else:
       [_,_,idLocations] = docStats[index]
-      if id not in idLocations: LookupError(f'Table of Contents contains link to nonexistent element id "{id}" in "{doc}".')
-      locations.append(strippedSplits[index]+idLocations[id])
+      try:
+        locations.append(strippedSplits[index]+idLocations[id])
+      except:
+        print(f'could not locate id {id} in document {doc}.')
   return locations
