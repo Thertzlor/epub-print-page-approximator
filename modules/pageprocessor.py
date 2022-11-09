@@ -45,7 +45,7 @@ def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:s
     pageLocations = pageLocations + approximatePageLocations(stripText[start:end],numPages,breakMode,pageMode,start)
     processedPages = processedPages + numPages
   lastRange = ranges[-1]
-  pagesRemaining =  pages - processedPages
+  pagesRemaining = pages - processedPages
   print(pagesRemaining,lastRange)
   if pagesRemaining != 0: pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
   return pageLocations
