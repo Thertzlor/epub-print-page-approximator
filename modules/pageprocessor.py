@@ -39,6 +39,8 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
   return pgList if offset == 0 else [p+offset for p in pgList]
 
 def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars'):
+  """This is the page location function used if we know not just how many pages are in a book, but also where specific pages are.\n
+  The content of each tuple in the ranges argument is the range start, range end and the number of pages within that range."""
   pageLocations:list[int] = []
   processedPages = 0
   for [start,end,numPages] in ranges: 
@@ -114,8 +116,8 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   docs = tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml))
   # processing the book contents.
   [stripText,stripSplits,docStats] = getBookContent(docs)
-  # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   knownPages:dict[int,str] = {}
+  # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   pageLocations:list[int]
   if useToc: pageLocations = approximatePageLocationsByRanges(processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats),stripText,pages,breakMode,pageMode)
   else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode)

@@ -16,7 +16,6 @@ def flattenToc(b:list,links:list[str]=[]):
   for t in b:
     if isinstance (t,list) or isinstance(t,tuple): flattenToc(t,links)
     else: links.append(t.href)
-
   return links
 
 
@@ -39,10 +38,8 @@ def getTocLocations(toc:list,docs:list[EpubHtml],stripSplits:list[int],docStats:
     if id is None: locations.append((link,stripSplits[index]))
     else:
       [_,_,idLocations] = docStats[index]
-      try:
-        locations.append((link,stripSplits[index]+idLocations[id]))
-      except Exception:
-        print(f'could not locate id {id} in document {doc}.')
+      try: locations.append((link,stripSplits[index]+idLocations[id]))
+      except Exception: print(f'could not locate id {id} in document {doc}.')
   return locations
 
 

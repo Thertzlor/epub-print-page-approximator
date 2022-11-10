@@ -23,17 +23,17 @@ This script requires the `ebooklib` python library.
 ## Command-line Arguments
 ### positional:
 * **filepath**: Path to the EPUB file you wish to paginate.
-* **pages**: The number of pages you want to add to the book.
+* **pages**: The number of print pages you want to insert into to the book.
 ### options:
-* **-p , --pagingMode**: Define how to divide pages. "chars" uses a fixed number of characters per page, "lines" a fixed number of lines/paragraphs. Enter a number to use the "lines" mode with a maximum number of characters per line. Default is "chars". See section [Advanced Paging](#advanced-paging) for details.
-* **-b , --breakMode**: Behavior if a pagebreak is generated in the middle of a word; `next` will go to the next whitespace, `prev` will to the previous, `split` will simply keep the break inside the word.
+* **-p , --pagingmode**: Define how to divide pages. "chars" uses a fixed number of characters per page, "lines" a fixed number of lines/paragraphs. Enter a number to use the "lines" mode with a maximum number of characters per line. Default is "chars". See section [Advanced Paging](#advanced-paging) for details.
+* **-b , --breakmode**: Behavior if a pagebreak is generated in the middle of a word; `next` will go to the next whitespace, `prev` will to the previous, `split` will simply keep the break inside the word.
 * **-s , --suffix**: Suffix for the newly generated EPUP file. Defaults to `_paginated`.
 * **-n , --name**: A new name for the newly generated EPUB file. Overrides the `--suffix` argument.
 * **-o , --outpath**: Save path for the output file. Does not include file name.
 * **-h, --help**: show help message and exit.
 ### flags
-* **--noNcx**: Do not insert a pageList Element into the EPUB2 ToC NCX file.
-* **--noNav**: Do not insert a page-list nav element into the EPUB3 navigation file.
+* **--noncx**: Do not insert a pageList Element into the EPUB2 ToC NCX file.
+* **--nonav**: Do not insert a page-list nav element into the EPUB3 navigation file.
 
 ---
 ## How?
@@ -69,5 +69,5 @@ Heavily illustrated books are also going to produce less reliable results since 
 
 ## Roadmap
 * More general testing of ebook compatibility.
-* Fixed page locations based on table of contents.
+* providing a windows executable
 * Maybe supporting playOrder for EPUB2.
