@@ -115,15 +115,17 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   docs = tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml))
   # we might have a book that starts at page 0
   pageOffset = 1
-  if useToc and tocMap[0] == 0:
-    pageOffset = 0
-    pages = pages + 1
   # processing the book contents.
   [stripText,stripSplits,docStats] = getBookContent(docs)
   knownPages:dict[int,str] = {}
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   pageLocations:list[int]
-  if useToc: pageLocations = approximatePageLocationsByRanges(processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats),stripText,pages,breakMode,pageMode)
+  if useToc:
+    mappedToc = processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats)
+    if next((t for t in tocMap if t != 0),0) == 1 and mappedToc[0][1] != 0:
+      pageOffset = 0
+      pages = pages + 1
+    pageLocations = approximatePageLocationsByRanges(mappedToc,stripText,pages,breakMode,pageMode)
   else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode)
   # return print(len(pageLocations),pageLocations)
   pagesMapped = tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) for pg in pageLocations)
