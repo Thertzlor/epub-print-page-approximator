@@ -12,7 +12,7 @@ def nodeText(node:etree.ElementBase):
   # If we don't filter, itertext includes the content of tags like head, meta and style, which makes no sense for our purposes.
   return ''.join([x for x in node.itertext('html','body','div','span','p','strong','em','a', 'b', 'i','h1','h2','h3','h4', 'h5','h6', 'title', 'figure', 'section','sub','ul','ol','li', 'abbr','blockquote', 'figcaption','aside','cite', 'code','pre', 'nav','tr', 'table','tbody','thead','header','th','td','math','mrow','mspace','msub','mi','mn','mo','var','mtable','mtr','mtd','mtext','msup','mfrac','msqrt','munderover','msubsup','mpadded','mphantom')])
 
-def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
+def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 1):
   """Function to populate a EPUB2 NCX file with our new list of pages."""
   # getting the XML document
   doc:etree.ElementBase = etree.fromstring(ncx.content)
@@ -44,15 +44,15 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}):
   genList = tag('pageList')
   genList.append(makeLabel('Pages'))
   # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
-  for i in range(len(linkList)): genList.append(makeTarget(i,1))
+  for i in range(len(linkList)): genList.append(makeTarget(i,pageOffset))
   doc.append(genList)
   # inserting the final text of our ncx file into our dictionary of changes.
   # also inserting line breaks for prettier formatting.
   repDict[ncx.file_name] = etree.tostring(doc).decode('utf-8').replace('<pageTarget','\n<pageTarget')
   return True
 
-  
-def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
+
+def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1):
   """Function to populate a EPUB3 Nav.xhtml file with our new list of pages."""
   doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser())
   # function for generating elements, mostly used to get proper autocomplete
@@ -80,7 +80,7 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={}):
   mainNav.append(header)
   lst = tag('ol')
   # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
-  for i in range(len(linkList)): lst.append(makeTarget(i,1))
+  for i in range(len(linkList)): lst.append(makeTarget(i,pageOffset))
   mainNav.append(lst)
   body.append(mainNav)
   # inserting the final text of our nav.xhtml file into our dictionary of changes.

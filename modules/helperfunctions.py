@@ -34,7 +34,7 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
   print(f'succesfully saved {dest}')
   
 
-def mapReport(a,b, t='Mapping page'):
+def mapReport(a,b, t='Mapping page break'):
   """simple printout function for mapping progress"""
   printProgressBar(a,b,f'{t} {a} of {b}','Done',2)
   return True

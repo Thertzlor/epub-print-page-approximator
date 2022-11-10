@@ -52,7 +52,7 @@ def processToC(toc:list,mapping:list[int],knownPages:dict[int,str],docs:list[Epu
     if page == 0: continue
     [link,textLocation] = tocData[i]
     knownPages[page] = link
-    pageRanges.append((textOffset,textLocation,page-pageOffset))
+    if page-pageOffset > 0: pageRanges.append((textOffset,textLocation,page-pageOffset))
     pageOffset = page
     textOffset = textLocation
   return pageRanges

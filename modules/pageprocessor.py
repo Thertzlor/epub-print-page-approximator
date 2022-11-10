@@ -48,7 +48,6 @@ def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:s
     processedPages = processedPages + numPages
   lastRange = ranges[-1]
   pagesRemaining = pages - processedPages
-  print(pagesRemaining,lastRange)
   if pagesRemaining != 0: pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
   return pageLocations
 
@@ -78,7 +77,7 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
   return pgList if offset == 0 else [p+offset for p in pgList]
 
 
-def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={}):
+def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={},pageOffset=1):
   """Function for mapping page locations to actual page break elements in the epub's documents."""
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
@@ -96,7 +95,7 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     breakSpan:etree.ElementBase = doc.makeelement('span')
     breakSpan.set('id',f'pg_break_{i}')
     # page breaks don't have text, but they do have a value.
-    breakSpan.set('value',str(i+1))
+    breakSpan.set('value',str(i+pageOffset))
     # EPUB2 does not support the epub: namespace.
     if epub3Nav is not None:breakSpan.set('epub:type','pagebreak')
     # we don't recalculate the ranges because page breaks do not add any text.
@@ -114,6 +113,11 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
   docs = tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml))
+  # we might have a book that starts at page 0
+  pageOffset = 1
+  if useToc and tocMap[0] == 0:
+    pageOffset = 0
+    pages = pages + 1
   # processing the book contents.
   [stripText,stripSplits,docStats] = getBookContent(docs)
   knownPages:dict[int,str] = {}
@@ -123,9 +127,9 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode)
   # return print(len(pageLocations),pageLocations)
   pagesMapped = tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) for pg in pageLocations)
-  [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav,knownPages)
+  [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset)
   repDict = {}
   # adding all changed documents to our dictionary of changed files
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0]).decode('utf-8')
   # finally, we save all our changed files into a new EPUB.
-  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
+  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)

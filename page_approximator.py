@@ -18,7 +18,7 @@ parser.add_argument('--nonav', action='store_true', help="[flag] Do not insert a
 args = parser.parse_args()
 
 if args.pages == 0 or args.pages == 1: raise SystemExit("No point in paginating if you don't actually want more than one page.")
-pageMode = args.pagingMode if search(r'^\d+$',args.pagingMode) is None else int(args.pagingMode)
+pageMode = args.pagingmode if search(r'^\d+$',args.pagingmode) is None else int(args.pagingmode)
 if not isinstance(pageMode,int) and pageMode not in ['lines','chars']: raise SystemExit("-p/--pagingMode argument has to be 'chars', 'lines' or a number.")
 
-processEPUB(args.filepath,args.pages,args.suffix,args.outpath,args.name,args.noNav,args.noNcx,args.breakMode,pageMode,tuple(args.chapterMap))
+processEPUB(args.filepath,args.pages,args.suffix,args.outpath,args.name,args.nonav,args.noncx,args.breakmode,pageMode,tuple(args.tocpages))

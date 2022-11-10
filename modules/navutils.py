@@ -13,10 +13,10 @@ def prepareNavigations(pub):
   return (epub3Nav,ncxNav)
 
 
-def processNavigations(epub3Nav:EpubNav,ncxNav:EpubHtml,pgLinks:list[str],repDict:dict,noNav:bool, noNcX:bool):
+def processNavigations(epub3Nav:EpubNav,ncxNav:EpubHtml,pgLinks:list[str],repDict:dict,noNav:bool, noNcX:bool,pageOffset=1):
   """Adding the link list to any available navigation files."""
   if epub3Nav and not noNav: 
-    if addLinksToNcx(epub3Nav,pgLinks,repDict) == False: return print('Pagination Cancelled') or False
+    if addLinksToNcx(epub3Nav,pgLinks,repDict,pageOffset) == False: return print('Pagination Cancelled') or False
   if ncxNav and not noNcX: 
-     if addLinksToNcx(ncxNav,pgLinks,repDict) == False :return print('Pagination Cancelled') or False
+     if addLinksToNcx(ncxNav,pgLinks,repDict,pageOffset) == False :return print('Pagination Cancelled') or False
   return True 
