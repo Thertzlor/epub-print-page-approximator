@@ -117,6 +117,7 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   pageOffset = 1
   # processing the book contents.
   [stripText,stripSplits,docStats] = getBookContent(docs)
+  print('Starting pagination...')
   knownPages:dict[int,str] = {}
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   pageLocations:list[int]

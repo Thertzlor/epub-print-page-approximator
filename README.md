@@ -1,3 +1,4 @@
+![version](https://img.shields.io/badge/version-1.1.3-blue)
 [![CodeFactor](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/badge/main)](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/overview/main)
 ![license](https://img.shields.io/github/license/Thertzlor/epub-print-page-approximator) 
 # Print Page Approximator for EPUB and EPUB3
@@ -11,11 +12,12 @@ This script offers a quick and easy, if not super accurate alternative and all y
 
 ---
 ## Usage
-
 ```powershell
 py .\page_approximator.py .\example_book.epub 150
 ```
 This will produce a copy of `example_book.epub` paginated with 150 pages in the current directory under the name of `example_book_paginated.epub`.
+
+You can also download the pre-built executable for 64bit Windows from the [Releases Section](https://github.com/Thertzlor/epub-print-page-approximator/releases).
 
 ### Dependencies
 This script requires the `ebooklib` python library.
