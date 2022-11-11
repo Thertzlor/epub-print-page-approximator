@@ -126,6 +126,5 @@ Heavily illustrated books are also going to produce less reliable results since 
 
 ## Roadmap
 * More general testing of ebook compatibility.
-* providing a windows executable.
 * Roman numeral support for front matter.
 * Maybe supporting playOrder for EPUB2.
