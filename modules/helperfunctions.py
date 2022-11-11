@@ -7,7 +7,7 @@ def between (str,pos,around,sep='|'):
   return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
 
 
-def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 60, fill = '█', printEnd = "\r"):
   """https://stackoverflow.com/questions/3173320/"""
   percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
   filledLength = int(length * iteration // total)
