@@ -3,7 +3,7 @@
 ![license](https://img.shields.io/github/license/Thertzlor/epub-print-page-approximator) 
 # Print Page Approximator for EPUB and EPUB3
 One of the biggest advantages of Ebooks is the freedom that dynamically reflowing text grants the reader.  
-However, having constantly shifting page numbers whenever you resize the text or change the font is often annyoing. Static print pages, even if they are technically no longer applicable, still have the advantage of being consistent.  
+However, having constantly shifting page numbers whenever you resize the text or change the font is often annoying. Static print pages, even if they are technically no longer applicable, still have the advantage of being consistent.  
 This is why both EPUB2 and EPUB3 standards support so called "print page" references, so that even when reading a book digitally you know which "actual" page you are on.  
 
 However, with the exceptions of some very high end digital releases, most ebooks don't implement this feature (most ebook reader apps also do not support it, but that's their loss, [KOreader](https://github.com/koreader/koreader), is a great option that does). So you are stuck with dynamic pages unless you own the print version and painstakingly insert hundreds page breaks by hand in an EPUB editor.
@@ -42,14 +42,16 @@ This script requires the `ebooklib` python library.
 ---
 ## How?
 The script will generate the pagination as follows:
-1. Extract all text from the EPUB HTML.
+1. Extract the book text* from the EPUB HTML.
 2. Divide the text equally based on the number of pages provided.
 3. Use node manipulation to map the page break locations to their corresponding locations in the HTML files.
 4. Insert invisible page-break span elements at those locations.
 5. Insert the reference list of pages into the navigation file of EPUB3 books or the table of contents NCX file of EPUB2 books (or both if a EPUB3 book contains an NCX as a fallback).
 6. Save the paginated ebook.
 
-Suffice to say that since everything is indeed only an *approximation*, so expect the produced numbers to be a few pages off compared to the print edition.
+Suffice to say that since everything is indeed only an *approximation*, so expect the produced numbers to be a few pages off compared to the print edition.  
+
+*Page Approximator defines the text of the book as the text within all HTML tags that can reasonably be assumed to be visible to the reader.
 
 ---
 ## Advanced Paging
@@ -127,4 +129,5 @@ Heavily illustrated books are also going to produce less reliable results since 
 ## Roadmap
 * More general testing of ebook compatibility.
 * Roman numeral support for front matter.
+* Support for adobe's page-map files.
 * Maybe supporting playOrder for EPUB2.
