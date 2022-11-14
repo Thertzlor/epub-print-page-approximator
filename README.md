@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.1.3-blue)
+![version](https://img.shields.io/badge/version-1.1.4-blue)
 [![CodeFactor](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/badge/main)](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/overview/main)
 ![license](https://img.shields.io/github/license/Thertzlor/epub-print-page-approximator) 
 # Print Page Approximator for EPUB and EPUB3
@@ -38,6 +38,7 @@ This script requires the `ebooklib` python library.
 ### flags
 * **--noncx**: Do not insert a pageList Element into the EPUB2 ToC NCX file.
 * **--nonav**: Do not insert a page-list nav element into the EPUB3 navigation file.
+* **--page-map**: Add a page-map.xml for ADE based readers. This is not part of the EPUB spec and will generate errors with EPUB checkers.
 
 ---
 ## How?
@@ -129,5 +130,4 @@ Heavily illustrated books are also going to produce less reliable results since 
 ## Roadmap
 * More general testing of ebook compatibility.
 * Roman numeral support for front matter.
-* Support for adobe's page-map files.
 * Maybe supporting playOrder for EPUB2.

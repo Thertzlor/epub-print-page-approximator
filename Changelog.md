@@ -2,6 +2,9 @@
 
 All notable changes to the EPUP Page Approximator will be documented here.
 
+## [1.1.4]
+- Added new flag `--page-map` for generating a page-map.xml file for compatibility with Adobe Digital Editions based readers.
+
 ## [1.1.3]
 - Introduced the `tocpages` option for matching page numbers to Table of Content markers.
 - Implemented logic for starting a book at page 0 if the `tocpages` list defines a 'first' page.
