@@ -1,7 +1,7 @@
 from ebooklib.epub import EpubHtml, etree
 
-from modules.helperfunctions import mapReport
 from modules.pathutils import relativePath
+from modules.progressbar import mapReport
 
 xns = {'x':'*'}
 """Universal namespace for XML traversals"""
@@ -11,6 +11,30 @@ def nodeText(node:etree.ElementBase):
   # We include a list of all valid HTML tags that we want to include in our text.
   # If we don't filter, itertext includes the content of tags like head, meta and style, which makes no sense for our purposes.
   return ''.join([x for x in node.itertext('html','body','div','span','p','strong','em','a', 'b', 'i','h1','h2','h3','h4', 'h5','h6', 'title', 'figure', 'section','sub','ul','ol','li', 'abbr','blockquote', 'figcaption','aside','cite', 'code','pre', 'nav','tr', 'table','tbody','thead','header','th','td','math','mrow','mspace','msub','mi','mn','mo','var','mtable','mtr','mtd','mtext','msup','mfrac','msqrt','munderover','msubsup','mpadded','mphantom')])
+
+
+def addPageMapReferences(opf):
+  myOpf:etree.ElementBase =  etree.fromstring(opf)
+  spine:etree.ElementBase = myOpf.find('x:spine',xns)
+  if spine is None: 
+    spine = myOpf.makeelement('spine',{'page-map':'map'})
+    myOpf.append(spine)
+  else: spine.set('page-map','map')
+  manifest:etree.ElementBase = myOpf.find('x:manifest',xns)
+  manifest.append(myOpf.makeelement('item',{'href':'page-map.xml','id':'map','media-type':"application/oebps-page-map+xml"}))
+  return etree.tostring(myOpf)
+
+
+def makePageMap(linkList:list[str],pageOffset = 1):
+  pgMap:etree.ElementBase = etree.fromstring('<?xml version="1.0" ?><page-map xmlns="http://www.idpf.org/2007/opf"></page-map>')
+  def tag(name:str,attributes:dict=None)->etree.ElementBase: return pgMap.makeelement(name,attributes)
+  def makeTarget(number:int,offset=0):
+    "Generates a pageTargets element containing a content tag with a link to the specified page number"
+    target = tag('page',{'id':f'pageNav_{number}', 'href':linkList[number], 'name':str(number+offset)})
+    return target
+  for i in range(len(linkList)): pgMap.append(makeTarget(i,pageOffset))
+  return pgMap
+
 
 def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 1):
   """Function to populate a EPUB2 NCX file with our new list of pages."""

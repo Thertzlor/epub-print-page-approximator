@@ -1,10 +1,10 @@
 from ebooklib import ITEM_DOCUMENT, ITEM_NAVIGATION
-from ebooklib.epub import EpubHtml, EpubNav
+from ebooklib.epub import EpubBook, EpubHtml, EpubNav
 
 from modules.nodeutils import addLinksToNcx
 
 
-def prepareNavigations(pub):
+def prepareNavigations(pub:EpubBook):
   """Extract the Navigation files from the EPUB"""
   ncxNav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_NAVIGATION)),None)
   epub3Nav:EpubHtml = next((x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubNav)),None)

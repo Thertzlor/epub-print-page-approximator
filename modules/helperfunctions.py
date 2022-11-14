@@ -1,4 +1,6 @@
-from ebooklib.epub import zipfile
+from ebooklib.epub import etree, zipfile
+
+from modules.nodeutils import addPageMapReferences
 
 
 def between (str,pos,around,sep='|'): 
@@ -7,21 +9,16 @@ def between (str,pos,around,sep='|'):
   return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
 
 
-def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimals = 1, length = 60, fill = '█', printEnd = "\r"):
-  """https://stackoverflow.com/questions/3173320/"""
-  percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-  filledLength = int(length * iteration // total)
-  bar = fill * filledLength + '-' * (length - filledLength)
-  print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
-  # Print New Line on Complete
-  if iteration == total: 
-    print()
-
-
-def overrideZip(src:str,dest:str,repDict:dict={}):
+def overrideZip(src:str,dest:str,repDict:dict={},newPageMap=True):
   """Zip replacer from the internet because for some reason the write method of the ebook library breaks HTML"""
   with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=zipfile.ZIP_DEFLATED) as outZip:
     # Iterate the input files
+    if newPageMap:
+      opfFile = next((x for x in inZip.infolist() if x.filename.endswith('.opf')),None)
+      if not opfFile: raise LookupError('somehow your epub does not have an opf file.')
+      opfContent = inZip.open(opfFile).read()
+      repDict[opfFile.filename] = addPageMapReferences(opfContent).decode('utf-8')
+
     for inZipInfo in inZip.infolist():
       # Read input file
       with inZip.open(inZipInfo) as inFile:
@@ -32,12 +29,6 @@ def overrideZip(src:str,dest:str,repDict:dict={}):
         # copying non-changed files, saving the mimetype without compression
         else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED)
   print(f'succesfully saved {dest}')
-  
-
-def mapReport(a,b, t='Mapping page break'):
-  """simple printout function for mapping progress"""
-  printProgressBar(a,b,f'{t} {a} of {b}','Done',2)
-  return True
 
 
 def splitStr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]

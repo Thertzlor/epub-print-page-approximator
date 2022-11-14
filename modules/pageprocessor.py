@@ -4,10 +4,11 @@ from re import search
 from ebooklib import ITEM_DOCUMENT
 from ebooklib.epub import EpubHtml, etree, read_epub
 
-from modules.helperfunctions import mapReport, overrideZip, splitStr
+from modules.helperfunctions import overrideZip, splitStr
 from modules.navutils import prepareNavigations, processNavigations
 from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
+from modules.progressbar import mapReport
 from modules.tocutils import checkToC, processToC
 
 
