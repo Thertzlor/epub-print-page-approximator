@@ -1,5 +1,5 @@
 from ebooklib import ITEM_DOCUMENT, ITEM_NAVIGATION
-from ebooklib.epub import EpubBook, EpubHtml, EpubNav
+from ebooklib.epub import EpubBook, EpubHtml, EpubNav, etree
 
 from modules.nodeutils import addLinksToNcx
 
@@ -20,3 +20,14 @@ def processNavigations(epub3Nav:EpubNav,ncxNav:EpubHtml,pgLinks:list[str],repDic
   if ncxNav and not noNcX: 
      if addLinksToNcx(ncxNav,pgLinks,repDict,pageOffset) == False :return print('Pagination Cancelled') or False
   return True 
+
+
+def makePgMap(linkList:list[str],pageOffset = 1):
+  pgMap:etree.ElementBase = etree.fromstring('<?xml version="1.0" ?><page-map xmlns="http://www.idpf.org/2007/opf"></page-map>')
+  def tag(name:str,attributes:dict=None)->etree.ElementBase: return pgMap.makeelement(name,attributes)
+  def makeTarget(number:int,offset=0):
+    "Generates a pageTargets element containing a content tag with a link to the specified page number"
+    target = tag('page',{'id':f'pageNav_{number}', 'href':linkList[number], 'name':str(number+offset)})
+    return target
+  for i in range(len(linkList)): pgMap.append(makeTarget(i,pageOffset))
+  return etree.tostring(pgMap).decode('utf-8')

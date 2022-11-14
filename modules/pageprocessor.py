@@ -5,7 +5,7 @@ from ebooklib import ITEM_DOCUMENT
 from ebooklib.epub import EpubHtml, etree, read_epub
 
 from modules.helperfunctions import overrideZip, splitStr
-from modules.navutils import prepareNavigations, processNavigations
+from modules.navutils import makePgMap, prepareNavigations, processNavigations
 from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
 from modules.progressbar import mapReport
@@ -106,7 +106,7 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
   return [pgLinks,changedDocs]
   
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=()):
+def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=(),adobeMap=False):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   pub = read_epub(path)
   useToc = len(tocMap) != 0
@@ -133,7 +133,8 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   pagesMapped = tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) for pg in pageLocations)
   [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset)
   repDict = {}
+  adoMap = None if adobeMap == False else makePgMap(pgLinks)
   # adding all changed documents to our dictionary of changed files
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0]).decode('utf-8')
   # finally, we save all our changed files into a new EPUB.
-  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict)
+  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict,adoMap)

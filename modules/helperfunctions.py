@@ -9,15 +9,20 @@ def between (str,pos,around,sep='|'):
   return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
 
 
-def overrideZip(src:str,dest:str,repDict:dict={},newPageMap=True):
+def overrideZip(src:str,dest:str,repDict:dict={},pageMap:str=None):
   """Zip replacer from the internet because for some reason the write method of the ebook library breaks HTML"""
   with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=zipfile.ZIP_DEFLATED) as outZip:
     # Iterate the input files
-    if newPageMap:
+    if pageMap:
       opfFile = next((x for x in inZip.infolist() if x.filename.endswith('.opf')),None)
       if not opfFile: raise LookupError('somehow your epub does not have an opf file.')
       opfContent = inZip.open(opfFile).read()
-      repDict[opfFile.filename] = addPageMapReferences(opfContent).decode('utf-8')
+      mapReferences = addPageMapReferences(opfContent)
+      if mapReferences is None: repDict['page-map.xml'] = pageMap
+      else:
+        repDict[opfFile.filename] = mapReferences.decode('utf-8')
+        outZip.writestr('page-map.xml',pageMap)
+      
 
     for inZipInfo in inZip.infolist():
       # Read input file

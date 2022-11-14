@@ -14,11 +14,11 @@ parser.add_argument('-n','--name', type=str, help="A new name for the newly gene
 parser.add_argument('-o','--outpath', type=str, help="Save path for the output file. Does not include file name",metavar='')
 parser.add_argument('--noncx',action='store_true', help="[flag] Do not insert a pageList Element into the EPUB2 ToC NCX file")
 parser.add_argument('--nonav', action='store_true', help="[flag] Do not insert a page-list nav element into the EPUB3 navigation file")
+parser.add_argument('--page-map', action='store_true', help="[flag] Add a page-map.xml for ADE based readers.")
 
 args = parser.parse_args()
 
 if args.pages == 0 or args.pages == 1: raise SystemExit("No point in paginating if you don't actually want more than one page.")
 pageMode = args.pagingmode if search(r'^\d+$',args.pagingmode) is None else int(args.pagingmode)
 if not isinstance(pageMode,int) and pageMode not in ['lines','chars']: raise SystemExit("-p/--pagingMode argument has to be 'chars', 'lines' or a number.")
-
-processEPUB(args.filepath,args.pages,args.suffix,args.outpath,args.name,args.nonav,args.noncx,args.breakmode,pageMode,tuple(args.tocpages))
+processEPUB(args.filepath,args.pages,args.suffix,args.outpath,args.name,args.nonav,args.noncx,args.breakmode,pageMode,tuple(args.tocpages),args.page_map)
