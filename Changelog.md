@@ -2,6 +2,12 @@
 
 All notable changes to the EPUP Page Approximator will be documented here.
 
+## [1.1.5]
+- added new `--autopage` flag for generating a dynamic number of pages by using the value of the `pages` argument as size definition of a single page.
+- added new `--suggest` flag for use together with `--autopage`. This flag will display the dynamically generated page count without saving it to a file.
+- Added a new "words" mode for the `--pagingmode` option.
+- The `pages` argument accepts the string "bookstats", resulting in displaying the character-, line-  and word count of the current book.
+
 ## [1.1.4]
 - Added new flag `--page-map` for generating a page-map.xml file for compatibility with Adobe Digital Editions based readers.
 

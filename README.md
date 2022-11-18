@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.1.4-blue)
+![version](https://img.shields.io/badge/version-1.1.5-blue)
 [![CodeFactor](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/badge/main)](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/overview/main)
 ![license](https://img.shields.io/github/license/Thertzlor/epub-print-page-approximator) 
 # Print Page Approximator for EPUB and EPUB3
@@ -8,7 +8,8 @@ This is why both EPUB2 and EPUB3 standards support so called "print page" refere
 
 However, with the exceptions of some very high end digital releases, most ebooks don't implement this feature (most ebook reader apps also do not support it, but that's their loss, [KOreader](https://github.com/koreader/koreader), is a great option that does). So you are stuck with dynamic pages unless you own the print version and painstakingly insert hundreds page breaks by hand in an EPUB editor.
 
-This script offers a quick and easy, if not super accurate alternative and all you need is the ebook and the number of pages you know the book has.
+This script offers a quick and easy, if not super accurate alternative and all you need is the ebook and the number of pages you know the book has.  
+You can also generate a cust9om page count based on a specific number of characters, lines or words per page.
 
 ---
 ## Usage
@@ -26,9 +27,9 @@ This script requires the `ebooklib` python library.
 ## Command-line Arguments
 ### positional:
 * **filepath**: Path to the EPUB file you wish to paginate.
-* **pages**: The number of print pages you want to insert into to the book.
+* **pages**: The number of print pages you want to insert into to the book. (You can also pass the word `"bookstats"` to print out the number of characters, lines and words in the book).
 ### options:
-* **-p , --pagingmode**: Define how to divide pages. "chars" uses a fixed number of characters per page, "lines" a fixed number of lines/paragraphs. Enter a number to use the "lines" mode with a maximum number of characters per line. Default is "chars". See section [Paging Modes](#paging-modes) for details.
+* **-p , --pagingmode**: Define how to divide pages. "chars" uses a fixed number of characters per page, "lines" a fixed number of lines/paragraphs, and "words" a fixed number of words. Enter a number to use the "lines" mode with a maximum number of characters per line. Default is "chars". See section [Paging Modes](#paging-modes) for details.
 * **-t, --tocpages**: A list of page numbers to be mapped to the ebook's chapter markers. See section [ToC Pages](#toc-pages) for details.
 * **-b , --breakmode**: Behavior if a pagebreak is generated in the middle of a word; `next` will go to the next whitespace, `prev` to the previous, `split` will simply keep the break inside the word.
 * **-s , --suffix**: Suffix for the newly generated EPUP file. Defaults to `"_paginated"`.
@@ -39,6 +40,8 @@ This script requires the `ebooklib` python library.
 * **--noncx**: Do not insert a pageList Element into the EPUB2 ToC NCX file.
 * **--nonav**: Do not insert a page-list nav element into the EPUB3 navigation file.
 * **--page-map**: Add a page-map.xml for ADE based readers. This is not part of the EPUB spec and will generate errors with EPUB checkers.
+* **--autopage**: Use the value of the 'pages' argument as the definition of a single page according to the current pagingmode and generate an automatic page count. For details see section [Automatic Pagination](#automatic-pagination)
+* **--suggest**: Only display automatically generated page count without applying it to the file. Only works if the `--autopage` flag is also set.
 
 ---
 ## How?
@@ -55,7 +58,7 @@ Suffice to say that since everything is indeed only an *approximation*, so expec
 *Page Approximator defines the text of the book as the text within all HTML tags that can reasonably be assumed to be visible to the reader.
 
 ---
-## Advanced Paging
+## Advanced Pagination
 In case the page approximations produced by the script's default settings are not accurate enough, Print Page Approximator includes a few more advanced options for modifying the output.
 
 ### Paging Modes
@@ -63,6 +66,7 @@ Using the `-p` or `--pagingmode` argument you can choose how the script will go 
 
 * **"chars"**: This is the default mode and also the simplest of all. All it does is divide the number of characters of the books text by the number of pages we want, arriving at a fixed character count per page. This generally works well, but is best used for dense books with very long paragraphs, think of the styles of Proust or Saramago as examples.
 * **"lines"**: In this mode the script divides the text up by line breaks and then calculates a fixed number of lines per page. The more predefined line breaks a book contains the better this mode works, so books of poetry are a good fit, as are books with lots of terse dialogue.
+* **"words"**: In this mode the text will be split into individual words [defined as any sequence of non-whitespace characters; The output of the Python str.split()] and then calculates the average number of words on a page based on the total number of words in the text.
 * ***number***: The final and most advanced paging mode is activated by passing a number as the argument. It works by using the `lines` mode and applying the provided number as a maximum character count per line. Shorter lines are left as-is, longer lines are split up. This can give you very accurate results, especially if you use the line length of the print edition as a reference (It's still not perfect of course, unless the book is typeset in a monospace font).
 
 ### ToC Pages
@@ -117,13 +121,36 @@ py .\page_approximator.py ".\sirens.epub" 336 -p 56 -t 0 0 0 0 0 1 41 62 95 105 
 Now the final output is as good as it gets, with all chapters on the right page and thanks to the number of sample points the pages in-between are accurate to within a few lines.
 
 ---
+## Automatic Pagination
+If rather then applying a predefined page count you want the script to estimated a page count based on custom parameters you can use the `--autopage` flag. This option changes the function of the primary `pages` argument from defining the final number of pages to setting the size of a single page.
+As an example:
+```powershell
+py .\page_approximator.py .\example_book.epub 1500 --autopage
+```
+This command will not create a book with 1500 pages but rather but rather define that a *single* page has 1500 characters and the final number of pages are calculated based on that.  
+Just as with the regular pagination function, the `--pagingmode` argument can be used to modify the behavior of the script but now in the context of how to interpret the single page definition:
+```powershell
+py .\page_approximator.py .\example_book.epub 30 --autopage --pagingmode lines
+```
+...Defines that a single page consists of 30 lines of text.
+```powershell
+py .\page_approximator.py .\example_book.epub 250 --autopage --pagingmode words
+```
+...Defines that a single page consists of 250 words.
+
+The numeric `--pagingmode` argument for maximum line length also works in this mode.
+
+### Technical Notes
+The difference between this automatic pagination of and the similar methods used for *Adobe Digital Editions* page numbers or Kindle "Locations" is that the latter two calculate pages based on the full contents of the HTML files. *Print Page Approximator* omits all HTML tags and other markup, trying to consider only the *actually readable* text of each file.
+
+---
 ## Caveats
 As a general rule, if you are processing books predominantly written in non-Latin based alphabets, especially with writing systems featuring different reading directions, non-space word boundaries or generally very different characters such as, Japanese, Arabic, Chinese or Braille I can't guarantee any sane results.
 
 There are also a few other cases that can throw off the page count, or produce other unintended effects.  
 One such case (especially in the default `chars` mode) are books in which the character density per page varies a lot.
 
-For example, since the first part of Pale Fire is a poem with short lines, there are a lot less characters per page in this part compared to the more dense rest of the book. When approximating by dividing the number of characters in the book by the given number of pages you'll end up with a value that is biased towards the second part, so the general page divisions will be very much out of synch with the print version (but of course, if you have a whole book of *just* poems the average will work out again). In such cases, tweaking the paging mode to `lines` or `lines + maximum` is recommended as laid out in the [previous section](#advanced-paging).  
+For example, since the first part of Pale Fire is a poem with short lines, there are a lot less characters per page in this part compared to the more dense rest of the book. When approximating by dividing the number of characters in the book by the given number of pages you'll end up with a value that is biased towards the second part, so the general page divisions will be very much out of synch with the print version (but of course, if you have a whole book of *just* poems the average will work out again). In such cases, tweaking the paging mode to `lines` or `lines + maximum` is recommended as laid out in the [Advanced Pagination section](#advanced-pagination).  
 
 Heavily illustrated books are also going to produce less reliable results since images are not taken into account when calculating the pages.
 

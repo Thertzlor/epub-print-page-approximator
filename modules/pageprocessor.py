@@ -1,30 +1,21 @@
 from math import floor
-from re import search
+from re import finditer, search
 
 from ebooklib import ITEM_DOCUMENT
 from ebooklib.epub import EpubHtml, etree, read_epub
 
-from modules.helperfunctions import overrideZip, splitStr
+from modules.helperfunctions import overrideZip
 from modules.navutils import makePgMap, prepareNavigations, processNavigations
 from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
 from modules.progressbar import mapReport
+from modules.statisticsutils import lineSplitter, outputStats, pagesFromStats
 from modules.tocutils import checkToC, processToC
 
 
 def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,offset=0):
   """Splitting up the stripped text of the book by number of lines. Takes 'lines' or a maximum line length as its pageMode parameter. """
-  lines:list[str]=[]
-  # initial split
-  splits = stripped.splitlines(keepends=True)
-  if pageMode == 'lines':
-    # in the simple 'lines' mode we don't care about the length of the lines
-    lines= splits
-  else:
-    # splitting up all lines above the maximum length
-    splitLines = [splitStr(x,pageMode) for x in splits]
-    # flattening our list of split up strings back into a regular list of strings
-    lines = [item for sublist in splitLines for item in sublist]
+  lines = lineSplitter(stripped,pageMode)
   # This should only seldomly happen, but best to be prepared.
   if len(lines) < pages: raise BaseException(f'The number of detected lines in the book ({len(lines)}) is smaller than the number of pages to generate ({pages}). Consider using the "chars" paging mode for this book.')
   lineOffset=0
@@ -35,9 +26,11 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
     lineOffset = lineOffset + len(line)
   # calculating the number of lines per page.
   step = len(lines)/pages
+  print(f'Calculated approximate page height of ${"{:.2f}".format(step)} lines')
   # step is a float, so we round it to get a valid index.
   pgList = [lineLocations[round(step*i)] for i in range(pages)]
   return pgList if offset == 0 else [p+offset for p in pgList]
+
 
 def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars'):
   """This is the page location function used if we know not just how many pages are in a book, but also where specific pages are.\n
@@ -57,6 +50,14 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
   if pageMode == 'lines' or isinstance(pageMode, int):
     # taking care of the 'lines' paging mode
     return approximatePageLocationsByLine(stripped,pages,pageMode,offset)
+  pgSize = 0
+  
+  if pageMode == 'words':
+    wordMatches = tuple(x.start() for x in finditer(r'\S+',stripped))
+    pgSize = len(wordMatches)/pages
+    if offset == 0: print(f'Calculated approximate page size of {pgSize} words')
+    pgListW = [wordMatches[round(pgSize*i)] for i in range(pages)]
+    return pgListW if offset == 0 else [p+offset for p in pgListW]
 
   pgSize = floor(len(stripped)/pages)
   if offset == 0: print(f'Calculated approximate page size of {pgSize} characters')
@@ -104,13 +105,20 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     # noting the filename of every document that was modified.
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   return [pgLinks,changedDocs]
-  
 
-def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=(),adobeMap=False):
+
+def checkValidConstellations(suggest:bool,auto:bool,useToc:bool,tocMap:tuple[int],toc:list):
+  if suggest and auto ==  False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
+  if useToc and checkToC(toc,tocMap) == False: return
+  return True
+
+
+def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=(),adobeMap=False,suggest=False,auto=False):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
+  pages = int(pages) if search(r'^\d+$', pages) else pages
   pub = read_epub(path)
   useToc = len(tocMap) != 0
-  if useToc and checkToC(pub.toc,tocMap) == False: return
+  if not checkValidConstellations(suggest,auto,useToc,tocMap,pub.toc): return
   [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
   docs = tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml))
@@ -118,6 +126,12 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
   pageOffset = 1
   # processing the book contents.
   [stripText,stripSplits,docStats] = getBookContent(docs)
+  if pages == 'bookstats': return outputStats(stripText,pageMode)
+  elif auto:
+    print('Generating automatic page count...')
+    pages = pagesFromStats(stripText,pageMode,pages)
+    if suggest:return print(f'Suggested page count: {pages}')
+    print(f'Generated page count: {pages}')
   print('Starting pagination...')
   knownPages:dict[int,str] = {}
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
@@ -130,10 +144,12 @@ def processEPUB(path:str,pages:int,suffix=None,newPath=None,newName=None,noNav=F
     pageLocations = approximatePageLocationsByRanges(mappedToc,stripText,pages,breakMode,pageMode)
   else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode)
   # return print(len(pageLocations),pageLocations)
-  pagesMapped = tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) for pg in pageLocations)
-  [pgLinks,changedDocs] = mapPages(pages,pagesMapped,stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset)
+  [pgLinks,changedDocs] = mapPages(
+    pages,tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) 
+    for pg in pageLocations),stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset
+    )
+  adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset)
   repDict = {}
-  adoMap = None if adobeMap == False else makePgMap(pgLinks)
   # adding all changed documents to our dictionary of changed files
   for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0]).decode('utf-8')
   # finally, we save all our changed files into a new EPUB.
