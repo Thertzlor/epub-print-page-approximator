@@ -114,6 +114,22 @@ def checkValidConstellations(suggest:bool,auto:bool,useToc:bool,tocMap:tuple[int
   return True
 
 
+def fillDict(changedDocs,docs,docStats):
+  repDict = {}
+  # adding all changed documents to our dictionary of changed files
+  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0]).decode('utf-8')
+  return repDict
+
+
+def mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pages,pageLocations,adobeMap):
+  [pgLinks,changedDocs] = mapPages(
+    pages,tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) 
+    for pg in pageLocations),stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset
+    )
+  adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset)
+  return (pgLinks,changedDocs,adoMap)
+
+
 def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=(),adobeMap=False,suggest=False,auto=False):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   pages = int(pages) if search(r'^\d+$', pages) else pages
@@ -144,14 +160,8 @@ def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noN
       pages = pages + 1
     pageLocations = approximatePageLocationsByRanges(mappedToc,stripText,pages,breakMode,pageMode)
   else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode)
-  # return print(len(pageLocations),pageLocations)
-  [pgLinks,changedDocs] = mapPages(
-    pages,tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) 
-    for pg in pageLocations),stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset
-    )
-  adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset)
-  repDict = {}
-  # adding all changed documents to our dictionary of changed files
-  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0]).decode('utf-8')
+
+  [pgLinks,changedDocs,adoMap] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pages,pageLocations,adobeMap)
+  repDict = fillDict(changedDocs,docs,docStats)
   # finally, we save all our changed files into a new EPUB.
   if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict,adoMap)

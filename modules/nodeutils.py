@@ -16,7 +16,7 @@ def nodeText(node:etree.ElementBase):
 def addPageMapReferences(opf)-> None|bytes:
   opfText = opf.decode('utf-8')
   if('page-map.xml' in opfText): None
-  myOpf:etree.ElementBase =  etree.fromstring(opf)
+  myOpf:etree.ElementBase = etree.fromstring(opf)
   spine:etree.ElementBase = myOpf.find('x:spine',xns)
   if spine is None: 
     spine = myOpf.makeelement('spine',{'page-map':'map'})
@@ -25,9 +25,6 @@ def addPageMapReferences(opf)-> None|bytes:
   manifest:etree.ElementBase = myOpf.find('x:manifest',xns)
   manifest.append(myOpf.makeelement('item',{'href':'page-map.xml','id':'map','media-type':"application/oebps-page-map+xml"}))
   return etree.tostring(myOpf)
-
-
-
 
 
 def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 1):
