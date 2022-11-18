@@ -45,19 +45,20 @@ def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:s
   if pagesRemaining != 0: pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
   return pageLocations
 
-def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0) -> list[int]:
-  """Generate a list of page break locations based on the chosen page number and paging mode."""
-  if pageMode == 'lines' or isinstance(pageMode, int):
-    # taking care of the 'lines' paging mode
-    return approximatePageLocationsByLine(stripped,pages,pageMode,offset)
-  pgSize = 0
-  
-  if pageMode == 'words':
+
+def approximatePageLocationsByWords(stripped:str,pages:int,offset:int):
     wordMatches = tuple(x.start() for x in finditer(r'\S+',stripped))
     pgSize = len(wordMatches)/pages
     if offset == 0: print(f'Calculated approximate page size of {pgSize} words')
     pgListW = [wordMatches[round(pgSize*i)] for i in range(pages)]
     return pgListW if offset == 0 else [p+offset for p in pgListW]
+
+
+def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0) -> list[int]:
+  """Generate a list of page break locations based on the chosen page number and paging mode."""
+    # taking care of the 'lines' paging mode
+  if pageMode == 'lines' or isinstance(pageMode, int): return approximatePageLocationsByLine(stripped,pages,pageMode,offset)
+  if pageMode == 'words': return approximatePageLocationsByWords(stripped,pages,offset)
 
   pgSize = floor(len(stripped)/pages)
   if offset == 0: print(f'Calculated approximate page size of {pgSize} characters')
@@ -108,7 +109,7 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
 
 
 def checkValidConstellations(suggest:bool,auto:bool,useToc:bool,tocMap:tuple[int],toc:list):
-  if suggest and auto ==  False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
+  if suggest and auto == False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
   if useToc and checkToC(toc,tocMap) == False: return
   return True
 
