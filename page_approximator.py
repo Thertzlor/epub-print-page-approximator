@@ -15,8 +15,8 @@ parser.add_argument('-o','--outpath', type=str, help="Save path for the output f
 parser.add_argument('--noncx',action='store_true', help="[flag] Do not insert a pageList Element into the EPUB2 ToC NCX file")
 parser.add_argument('--nonav', action='store_true', help="[flag] Do not insert a page-list nav element into the EPUB3 navigation file")
 parser.add_argument('--page-map', action='store_true', help="[flag] Add a page-map.xml for ADE based readers.")
-parser.add_argument('--suggest', action='store_true', help="[flag] Only display automatically generated pages, but don't apply them")
-parser.add_argument('--autopage', action='store_true', help="[flag] Use the value of the 'pages' argument as the definition of a single page according to the current pagingmode and generate an automatic page count.")
+parser.add_argument('--autopage', action='store_true', help="[flag] Use the value of the 'pages' argument as the definition of a single page according to the current pagingmode and generate an automatic page count")
+parser.add_argument('--suggest', action='store_true', help="[flag] Only display automatically generated page count without applying it to the file")
 
 args = parser.parse_args()
 

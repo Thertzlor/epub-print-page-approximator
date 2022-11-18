@@ -107,13 +107,18 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
   return [pgLinks,changedDocs]
 
 
+def checkValidConstellations(suggest:bool,auto:bool,useToc:bool,tocMap:tuple[int],toc:list):
+  if suggest and auto ==  False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
+  if useToc and checkToC(toc,tocMap) == False: return
+  return True
+
+
 def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=(),adobeMap=False,suggest=False,auto=False):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
-  if suggest and auto ==  False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
   pages = int(pages) if search(r'^\d+$', pages) else pages
   pub = read_epub(path)
   useToc = len(tocMap) != 0
-  if useToc and checkToC(pub.toc,tocMap) == False: return
+  if not checkValidConstellations(suggest,auto,useToc,tocMap,pub.toc): return
   [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
   docs = tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml))
