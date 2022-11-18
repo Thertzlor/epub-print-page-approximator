@@ -1,3 +1,5 @@
+from math import ceil
+
 from modules.helperfunctions import splitStr
 
 
@@ -14,3 +16,16 @@ def lineSplitter(txt:str,lineLength:str|int):
 def textStats(txt:str,lineLength:str|int):
   lineCount = lineSplitter(txt,lineLength)
   return (len(txt),len(lineCount),len(txt.split()))
+
+
+def pagesFromStats(text:str,pageMode:str|int,pageDef:int):
+  [chars,lines,words] = textStats(text,pageMode)
+  if pageMode == 'chars': return ceil(chars/pageDef)
+  if pageMode == 'words': return ceil(words/pageDef)
+  return ceil(lines/pageDef)
+
+
+def outputStats(text,pageMode):
+  print('Displaying book stats...')
+  [chars,lines,words] = textStats(text,pageMode)
+  print(f'characters:{chars}, lines:{lines}, words:{words}')

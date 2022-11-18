@@ -1,4 +1,4 @@
-from math import ceil, floor
+from math import floor
 from re import finditer, search
 
 from ebooklib import ITEM_DOCUMENT
@@ -9,7 +9,7 @@ from modules.navutils import makePgMap, prepareNavigations, processNavigations
 from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
 from modules.progressbar import mapReport
-from modules.statisticsutils import lineSplitter, textStats
+from modules.statisticsutils import lineSplitter, outputStats, pagesFromStats
 from modules.tocutils import checkToC, processToC
 
 
@@ -30,6 +30,7 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
   # step is a float, so we round it to get a valid index.
   pgList = [lineLocations[round(step*i)] for i in range(pages)]
   return pgList if offset == 0 else [p+offset for p in pgList]
+
 
 def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars'):
   """This is the page location function used if we know not just how many pages are in a book, but also where specific pages are.\n
@@ -104,18 +105,7 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     # noting the filename of every document that was modified.
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   return [pgLinks,changedDocs]
-  
 
-def outputStats(text,pageMode):
-  print('Displaying book stats...')
-  [chars,lines,words] = textStats(text,pageMode)
-  print(f'characters:{chars}, lines:{lines}, words:{words}')
-
-def pagesFromStats(text:str,pageMode:str|int,pageDef:int):
-  [chars,lines,words] = textStats(text,pageMode)
-  if pageMode == 'chars': return ceil(chars/pageDef)
-  if pageMode == 'words': return ceil(words/pageDef)
-  return ceil(lines/pageDef)
 
 def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=(),adobeMap=False,suggest=False,auto=False):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
