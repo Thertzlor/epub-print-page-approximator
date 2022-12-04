@@ -60,6 +60,15 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
   pgList = [lineLocations[round(step*i)] for i in range(pages)]
   return pgList if offset == 0 else [p+offset for p in pgList]
 
+def getSingleLocation(lastPage:int,ranges:list[tuple[int,int,int]]):
+  offset = 0
+  lastLocation = 0
+  for [_,end,numPages] in ranges:
+    offset = offset+ numPages
+    if offset >= lastPage:
+      lastLocation = end
+      break
+  return lastLocation
 
 def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],frontRanges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars',roman:int|None=None,tocMap:tuple[int|str]=()):
   """This is the page location function used if we know not just how many pages are in a book, but also where specific pages are.\n
@@ -74,7 +83,8 @@ def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],frontRanges
     [_,contentMapped] = approximatePageLocationsByRanges(ranges,(),stripText,pages,breakMode,pageMode)
     if roman == 0 or len(knownRomans) != 0:
       lastKnownRoman = romanToInt(knownRomans[-1]) if len(knownRomans) != 0 else 0
-      frontDef = floor(sum(calculatedSizes)/len(calculatedSizes))
+      lastRomanLocation = getSingleLocation(lastKnownRoman,frontRanges)
+      frontDef = floor(sum(calculatedSizes)/len(calculatedSizes)) if lastRomanLocation == 0 else floor(lastRomanLocation/lastKnownRoman)
       roman = max(pagesFromStats(frontText,pageMode,frontDef) if roman == 0 else roman,lastKnownRoman) 
       if len(frontRanges) == 0: frontRanges = [(0,frontEnd,roman)]
     print(frontEnd,frontRanges,ranges)
@@ -86,7 +96,7 @@ def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],frontRanges
   for [start,end,numPages] in ranges: 
     pageLocations = pageLocations + approximatePageLocations(stripText[start:end],numPages,breakMode,pageMode,start)
     processedPages = processedPages + numPages
-  lastRange = ranges[-1]
+  lastRange = ranges[-1] if len(ranges) != 0 else (0,0,0)
   pagesRemaining = pages - processedPages
   if pagesRemaining != 0: 
     pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
