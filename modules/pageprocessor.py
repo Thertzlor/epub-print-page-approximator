@@ -59,6 +59,7 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
   pgList = [lineLocations[round(step*i)] for i in range(pages)]
   return pgList if offset == 0 else [p+offset for p in pgList]
 
+
 def getSingleLocation(lastPage:int,ranges:list[tuple[int,int,int]]):
   offset = 0
   lastLocation = 0
@@ -115,6 +116,21 @@ def approximatePageLocationsByWords(stripped:str,pages:int,offset:int):
     return pgListW if offset == 0 else [p+offset for p in pgListW]
 
 
+def shiftPageListing(pgList:list[int],stripped:str,pgSize:int, breakMode:str):
+    for [i,p] in enumerate(pgList):
+      # getting the text of the current page.
+      page = stripped[p:p+pgSize]
+      # the 'prev' mode uses the same operations as the 'next' mode, just on the reversed string.
+      if breakMode == 'prev': page = page[::-1]
+      # finding the next/previous whitespace character.
+      nextSpace = search(r'\s',page)
+      # If we don't find any whitespace we just leave the break where it is.
+      if nextSpace is None: continue
+      # in the 'prev' mode we need to subtract the index we found.
+      pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
+      return pgList
+
+
 def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0,roman:int|None=None) -> list[int]:
   """Generate a list of page break locations based on the chosen page number and paging mode."""
     # taking care of the 'lines' paging mode
@@ -129,17 +145,7 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
   pgList = [i*pgSize for i in range(pages)]
   # the 'split' break mode does not care about breaking pages in the middle of a word, so nothing needs to be done.
   if breakMode == 'split': return pgList
-  for [i,p] in enumerate(pgList):
-    # getting the text of the current page.
-    page = stripped[p:p+pgSize]
-    # the 'prev' mode uses the same operations as the 'next' mode, just on the reversed string.
-    if breakMode == 'prev': page = page[::-1]
-    # finding the next/previous whitespace character.
-    nextSpace = search(r'\s',page)
-    # If we don't find any whitespace we just leave the break where it is.
-    if nextSpace is not None:
-      # in the 'prev' mode we need to subtract the index we found.
-      pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
+  pgList = shiftPageListing(pgList,stripped,pgSize,breakMode)
   return pgList if offset == 0 else [p+offset for p in pgList]
 
 
