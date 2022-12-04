@@ -1,39 +1,31 @@
-from ebooklib.epub import etree, zipfile
+from re import search
 
-from modules.nodeutils import addPageMapReferences
+num_map = ((1000, 'M'), (900, 'CM'), (500, 'D'), (400, 'CD'), (100, 'C'), (90, 'XC'),(50, 'L'), (40, 'XL'), (10, 'X'), (9, 'IX'), (5, 'V'), (4, 'IV'), (1, 'I'))
 
+def intToRoman(num:int):
+  """Convert an integer to a roman numeral"""
+  roman = ''
+  while num > 0:
+    for i, r in num_map:
+      while num >= i:
+        roman += r
+        num -= i
+  return roman.lower()
+
+roman = {'i':1,'v':5,'x':10,'l':50,'c':100,'d':500,'m':1000}
+def romanToInt(s: str) -> int:
+  s = s.lower()
+  summ= 0
+  for i in range(len(s)-1,-1,-1):
+    num = roman[s[i]]
+    if 3*num < summ:  summ = summ-num
+    else: summ = summ+num
+  return summ
 
 def between (str,pos,around,sep='|'): 
   """split a string at a certain position, highlight the split with a separator and output a range of characters to either side.\n
   Used for debugging purposes"""
   return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
-
-
-def overrideZip(src:str,dest:str,repDict:dict={},pageMap:str=None):
-  """Zip replacer from the internet because for some reason the write method of the ebook library breaks HTML"""
-  with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=zipfile.ZIP_DEFLATED) as outZip:
-    # Iterate the input files
-    if pageMap:
-      opfFile = next((x for x in inZip.infolist() if x.filename.endswith('.opf')),None)
-      if not opfFile: raise LookupError('somehow your epub does not have an opf file.')
-      opfContent = inZip.open(opfFile).read()
-      mapReferences = addPageMapReferences(opfContent)
-      if mapReferences is None: repDict['page-map.xml'] = pageMap
-      else:
-        repDict[opfFile.filename] = mapReferences.decode('utf-8')
-        outZip.writestr('page-map.xml',pageMap)
-      
-
-    for inZipInfo in inZip.infolist():
-      # Read input file
-      with inZip.open(inZipInfo) as inFile:
-        # Sometimes EbookLib does not include the root epub path in its filenames, so we're using endswith.
-        inDict = next((x for x in repDict.keys() if inZipInfo.filename.endswith(x)),None)
-        if inDict is not None:
-          outZip.writestr(inZipInfo.filename, repDict[inDict].encode('utf-8'))
-        # copying non-changed files, saving the mimetype without compression
-        else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED)
-  print(f'succesfully saved {dest}')
 
 
 def splitStr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
@@ -43,3 +35,11 @@ def between (str,pos,around,sep='|'):
   """split a string at a certain position, highlight the split with a separator and output a range of characters to either side.\n
   Used for debugging purposes"""
   return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
+
+
+def toInt(str:str|None): 
+  if not str: return str
+  return str if search(r'^\d+$',str) is None else int(str)
+
+def romanize(num:int,roman:int,offset:int):
+  return intToRoman(num+offset) if (roman or 0) > num else (num-(roman or 0)+offset)

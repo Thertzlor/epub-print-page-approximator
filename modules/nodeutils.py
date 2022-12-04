@@ -1,5 +1,6 @@
 from ebooklib.epub import EpubHtml, etree
 
+from modules.helperfunctions import romanize
 from modules.pathutils import relativePath
 from modules.progressbar import mapReport
 
@@ -13,7 +14,7 @@ def nodeText(node:etree.ElementBase):
   return ''.join([x for x in node.itertext('html','body','div','span','p','strong','em','a', 'b', 'i','h1','h2','h3','h4', 'h5','h6', 'title', 'figure', 'section','sub','ul','ol','li', 'abbr','blockquote', 'figcaption','aside','cite', 'code','pre', 'nav','tr', 'table','tbody','thead','header','th','td','math','mrow','mspace','msub','mi','mn','mo','var','mtable','mtr','mtd','mtext','msup','mfrac','msqrt','munderover','msubsup','mpadded','mphantom')])
 
 
-def addPageMapReferences(opf)-> None|bytes:
+def addPageMapRefs(opf)-> None|bytes:
   opfText = opf.decode('utf-8')
   if('page-map.xml' in opfText): None
   myOpf:etree.ElementBase = etree.fromstring(opf)
@@ -27,7 +28,7 @@ def addPageMapReferences(opf)-> None|bytes:
   return etree.tostring(myOpf)
 
 
-def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 1):
+def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 1,roman=0):
   """Function to populate a EPUB2 NCX file with our new list of pages."""
   # getting the XML document
   doc:etree.ElementBase = etree.fromstring(ncx.content)
@@ -44,8 +45,8 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 
 
   def makeTarget(number:int,offset=0):
     "Generates a pageTargets element containing a content tag with a link to the specified page number"
-    target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(number+offset)})
-    target.append(makeLabel(number+offset))
+    target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(romanize(number,roman,offset))})
+    target.append(makeLabel(romanize(number,roman,offset)))
     target.append(tag('content',{'src':relativePath(ncx.file_name,linkList[number])}))
     return target
 
@@ -67,7 +68,7 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 
   return True
 
 
-def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1):
+def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1,roman=0):
   """Function to populate a EPUB3 Nav.xhtml file with our new list of pages."""
   doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser())
   # function for generating elements, mostly used to get proper autocomplete
@@ -76,7 +77,7 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1):
     """generating a list entry with a link to the page break element."""
     target = tag('li')
     link = tag('a',{'href':relativePath(nav.file_name,linkList[number])})
-    link.text=str(number+offset)
+    link.text=str(romanize(number,roman,offset))
     target.append(link)
     return target
   

@@ -1,5 +1,7 @@
 from ebooklib.epub import EpubHtml, etree
 
+from modules.helperfunctions import romanToInt
+
 
 def printToc(b:list,indent='', offset = 1):
   """Output all entries of a table of contents to the console."""
@@ -19,12 +21,12 @@ def flattenToc(b:list,links:list[str]=[]):
   return links
 
 
-def checkToC(toc:list,mapping:list[int]):
+def checkToC(toc:list,mapping:tuple[int|int]):
   """Check if the contents of our page mapping matches the actual table of contents in the book."""
   if len(flattenToc(toc)) == len(mapping): return True
   print('The manual chapter map must have the same number of entries as the Table of Contents of the ebook.\n The current ToC Data has the following entries:')
   printToc(toc)
-  print('\n Please adjust your list.')
+  print('\nPlease adjust your list.')
   return False
 
 def getTocLocations(toc:list,docs:list[EpubHtml],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]]):
@@ -45,19 +47,26 @@ def getTocLocations(toc:list,docs:list[EpubHtml],stripSplits:list[int],docStats:
   return locations
 
 
-def processToC(toc:list,mapping:list[int],knownPages:dict[int,str],docs:list[EpubHtml],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]]):
-  """Using our page  map and ToC to define ranges within the book text"""
-  tocData = getTocLocations(toc,docs,stripSplits,docStats)
-  pageOffset = 0
-  textOffset=0
-  pageRanges: list[tuple[int,int,int]] = []
+def createRange(mapping:list[int|str],tocData:list[tuple[str, int]],knownPages:dict[int|str,str],textOffset=0,pageOffset = 0):
+  ranges:list[tuple[int,int,int]] = []
   for [i,page] in enumerate(mapping):
     if page == 0: continue
     [link,textLocation] = tocData[i]
-    # making sure we don't generate unneeded page breaks later
     knownPages[page] = link
+    if type(page) == str: page = romanToInt(page)
+    # making sure we don't generate unneeded page breaks later
     # if chapters or pages are in the wrong order we just ignore them.
-    if page-pageOffset > 0: pageRanges.append((textOffset,textLocation,page-pageOffset))
+    if page-pageOffset > 0: 
+      ranges.append((textOffset,textLocation,page-pageOffset))
     pageOffset = page
     textOffset = textLocation
-  return pageRanges
+  return ranges
+
+
+def processToC(toc:list,mapping:list[int|str],knownPages:dict[int,str],docs:list[EpubHtml],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],pageOffset:int)-> tuple[list[tuple[int, int, int]], list[tuple[int, int, int]]]:
+  """Using our page  map and ToC to define ranges within the book text"""
+  tocData = getTocLocations(toc,docs,stripSplits,docStats)
+  pageOne = next((i for [i,x] in enumerate(mapping) if x == 1),None)
+  if pageOne is None: return ([],createRange(mapping,tocData,knownPages))
+  [frontMap,contentMap] = [createRange(x,o,knownPages,i,pageOffset if n == 1 else 0) for [n,[x,o,i]] in enumerate(((mapping[0:pageOne],tocData[0:pageOne],0),(mapping[pageOne:],tocData[pageOne:],tocData[pageOne-1][1])))]
+  return (frontMap,contentMap)

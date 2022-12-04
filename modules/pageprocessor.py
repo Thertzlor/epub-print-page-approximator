@@ -2,15 +2,43 @@ from math import floor
 from re import finditer, search
 
 from ebooklib import ITEM_DOCUMENT
-from ebooklib.epub import EpubHtml, etree, read_epub
+from ebooklib.epub import EpubHtml, etree, read_epub, zipfile
 
-from modules.helperfunctions import overrideZip
+from modules.helperfunctions import romanize, romanToInt
 from modules.navutils import makePgMap, prepareNavigations, processNavigations
-from modules.nodeutils import getBookContent, getNodeForIndex, insertAtPosition
+from modules.nodeutils import (addPageMapRefs, getBookContent, getNodeForIndex,
+                               insertAtPosition)
 from modules.pathutils import pageIdPattern, pathProcessor
 from modules.progressbar import mapReport
 from modules.statisticsutils import lineSplitter, outputStats, pagesFromStats
 from modules.tocutils import checkToC, processToC
+
+calculatedSizes:list[int]= []
+
+def overrideZip(src:str,dest:str,repDict:dict={},pageMap:str=None):
+  """Zip replacer from the internet because for some reason the write method of the ebook library breaks HTML"""
+  with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=zipfile.ZIP_DEFLATED) as outZip:
+    # Iterate the input files
+    if pageMap:
+      opfFile = next((x for x in inZip.infolist() if x.filename.endswith('.opf')),None)
+      if not opfFile: raise LookupError('somehow your epub does not have an opf file.')
+      opfContent = inZip.open(opfFile).read()
+      mapReferences = addPageMapRefs(opfContent)
+      if mapReferences is None: repDict['page-map.xml'] = pageMap
+      else:
+        repDict[opfFile.filename] = mapReferences.decode('utf-8')
+        outZip.writestr('page-map.xml',pageMap)
+
+    for inZipInfo in inZip.infolist():
+      # Read input file
+      with inZip.open(inZipInfo) as inFile:
+        # Sometimes EbookLib does not include the root epub path in its filenames, so we're using endswith.
+        inDict = next((x for x in repDict.keys() if inZipInfo.filename.endswith(x)),None)
+        if inDict is not None:
+          outZip.writestr(inZipInfo.filename, repDict[inDict].encode('utf-8'))
+        # copying non-changed files, saving the mimetype without compression
+        else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED)
+  print(f'succesfully saved {dest}')
 
 
 def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,offset=0):
@@ -18,7 +46,7 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
   lines = lineSplitter(stripped,pageMode)
   # This should only seldomly happen, but best to be prepared.
   if len(lines) < pages: raise BaseException(f'The number of detected lines in the book ({len(lines)}) is smaller than the number of pages to generate ({pages}). Consider using the "chars" paging mode for this book.')
-  lineOffset=0
+  lineOffset = 0
   lineLocations:list[int]=[]
   # for most of the splitting we don't care about text content, just locations.
   for line in lines:
@@ -26,15 +54,33 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
     lineOffset = lineOffset + len(line)
   # calculating the number of lines per page.
   step = len(lines)/pages
-  print(f'Calculated approximate page height of ${"{:.2f}".format(step)} lines')
+  if offset == 0: print(f'Calculated approximate page height of {"{:.2f}".format(step)} lines')
+  calculatedSizes.append(step)
   # step is a float, so we round it to get a valid index.
   pgList = [lineLocations[round(step*i)] for i in range(pages)]
   return pgList if offset == 0 else [p+offset for p in pgList]
 
 
-def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars'):
+def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],frontRanges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars',roman:int|None=None,tocMap:tuple[int|str]=()):
   """This is the page location function used if we know not just how many pages are in a book, but also where specific pages are.\n
   The content of each tuple in the ranges argument is the range start, range end and the number of pages within that range."""
+  knownRomans = [x for x in tocMap if isinstance(x,str)]
+  if roman is not None or len(knownRomans) != 0:
+    if roman is None: roman = 0
+    pageOne = next((i for [i,x] in enumerate(tocMap) if x == 1),None)
+    if pageOne is None: raise LookupError('ToC map needs to define the location of page 1 for compatibility with Roman numerals for front matter')
+    frontEnd = ranges[0][0]
+    frontText = stripText[0:frontEnd]
+    [_,contentMapped] = approximatePageLocationsByRanges(ranges,(),stripText,pages,breakMode,pageMode)
+    if roman == 0 or len(knownRomans) != 0:
+      lastKnownRoman = romanToInt(knownRomans[-1]) if len(knownRomans) != 0 else 0
+      frontDef = floor(sum(calculatedSizes)/len(calculatedSizes))
+      roman = max(pagesFromStats(frontText,pageMode,frontDef) if roman == 0 else roman,lastKnownRoman) 
+      if len(frontRanges) == 0: frontRanges = [(0,frontEnd,roman)]
+    print(frontEnd,frontRanges,ranges)
+    [_,frontMapped] = approximatePageLocationsByRanges(frontRanges,(),frontText,roman,breakMode,pageMode)
+    return (roman,frontMapped+contentMapped)
+
   pageLocations:list[int] = []
   processedPages = 0
   for [start,end,numPages] in ranges: 
@@ -42,26 +88,30 @@ def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],stripText:s
     processedPages = processedPages + numPages
   lastRange = ranges[-1]
   pagesRemaining = pages - processedPages
-  if pagesRemaining != 0: pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
-  return pageLocations
+  if pagesRemaining != 0: 
+    pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
+  return (0,pageLocations)
 
 
 def approximatePageLocationsByWords(stripped:str,pages:int,offset:int):
     wordMatches = tuple(x.start() for x in finditer(r'\S+',stripped))
     pgSize = len(wordMatches)/pages
     if offset == 0: print(f'Calculated approximate page size of {pgSize} words')
+    calculatedSizes.append(pgSize)
     pgListW = [wordMatches[round(pgSize*i)] for i in range(pages)]
     return pgListW if offset == 0 else [p+offset for p in pgListW]
 
 
-def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0) -> list[int]:
+def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0,roman:int|None=None) -> list[int]:
   """Generate a list of page break locations based on the chosen page number and paging mode."""
     # taking care of the 'lines' paging mode
+  if len(stripped) == 0: return [0]
   if pageMode == 'lines' or isinstance(pageMode, int): return approximatePageLocationsByLine(stripped,pages,pageMode,offset)
   if pageMode == 'words': return approximatePageLocationsByWords(stripped,pages,offset)
-
+  if roman is not None: pages = pages + (roman or 0)
   pgSize = floor(len(stripped)/pages)
   if offset == 0: print(f'Calculated approximate page size of {pgSize} characters')
+  calculatedSizes.append(pgSize)
   # The initial locations for our page splits are simply multiples of the page size
   pgList = [i*pgSize for i in range(pages)]
   # the 'split' break mode does not care about breaking pages in the middle of a word, so nothing needs to be done.
@@ -74,31 +124,32 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
     # finding the next/previous whitespace character.
     nextSpace = search(r'\s',page)
     # If we don't find any whitespace we just leave the break where it is.
-    if nextSpace is not None: 
+    if nextSpace is not None:
       # in the 'prev' mode we need to subtract the index we found.
       pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
   return pgList if offset == 0 else [p+offset for p in pgList]
 
 
-def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={},pageOffset=1):
+def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={},pageOffset=1,roman=0):
   """Function for mapping page locations to actual page break elements in the epub's documents."""
   changedDocs:list[str] = []
   pgLinks:list[str]=[]
   # We use currentIndex and currentIndex to keep track of which document ranges we need.
   for [i,[pg,docIndex]] in enumerate(pagesMapped):
     # showing the progress bar
-    mapReport(i+1,pages)
+    mapReport(i+1,len(pagesMapped))
     docLocation = pg - stripSplits[docIndex]
     # Generating links. If the location is right at the start of a file we just link to the file directly
     [doc,docRanges,_] = docStats[docIndex]
-    pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}' if i not in knownPages else knownPages[i])
+    realPage = romanize(i,roman,pageOffset)
+    pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}' if realPage not in knownPages else knownPages[realPage])
     # no need to insert a break in that case either
-    if docLocation == 0: continue
+    if docLocation == 0: continue 
     # making our page breaker
     breakSpan:etree.ElementBase = doc.makeelement('span')
     breakSpan.set('id',f'pg_break_{i}')
     # page breaks don't have text, but they do have a value.
-    breakSpan.set('value',str(i+pageOffset))
+    breakSpan.set('value',str(realPage))
     # EPUB2 does not support the epub: namespace.
     if epub3Nav is not None:breakSpan.set('epub:type','pagebreak')
     # we don't recalculate the ranges because page breaks do not add any text.
@@ -108,7 +159,7 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
   return [pgLinks,changedDocs]
 
 
-def checkValidConstellations(suggest:bool,auto:bool,useToc:bool,tocMap:tuple[int],toc:list):
+def checkValidConstellations(suggest:bool,auto:bool,useToc:bool,tocMap:tuple[int|str],toc:list):
   if suggest and auto == False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
   if useToc and checkToC(toc,tocMap) == False: return
   return True
@@ -121,18 +172,20 @@ def fillDict(changedDocs,docs,docStats):
   return repDict
 
 
-def mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pages,pageLocations,adobeMap):
+def mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pages,pageLocations,adobeMap,roman:int|None):
   [pgLinks,changedDocs] = mapPages(
     pages,tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) 
-    for pg in pageLocations),stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset
+    for pg in pageLocations),stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,roman
     )
-  adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset)
+  adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset,roman)
   return (pgLinks,changedDocs,adoMap)
 
 
-def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int]=(),adobeMap=False,suggest=False,auto=False):
+def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int|str]=(),adobeMap=False,suggest=False,auto=False,roman:int|str|None=None):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   pages = int(pages) if search(r'^\d+$', pages) else pages
+  if roman == 'auto': roman = 0
+  elif roman is not None and type(roman) != int: roman = romanToInt(roman)
   pub = read_epub(path)
   useToc = len(tocMap) != 0
   if not checkValidConstellations(suggest,auto,useToc,tocMap,pub.toc): return
@@ -154,14 +207,13 @@ def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noN
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   pageLocations:list[int]
   if useToc:
-    mappedToc = processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats)
-    if next((t for t in tocMap if t != 0),0) == 1 and mappedToc[0][1] != 0:
+    if tocMap[0] == 0 and roman is None and next((x for x in tocMap if isinstance(x,str)),None) is None:
       pageOffset = 0
-      pages = pages + 1
-    pageLocations = approximatePageLocationsByRanges(mappedToc,stripText,pages,breakMode,pageMode)
-  else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode)
-
-  [pgLinks,changedDocs,adoMap] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pages,pageLocations,adobeMap)
+      pages = pages+1
+    [frontRanges,contentRanges] = processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats,pageOffset)
+    [roman,pageLocations] = approximatePageLocationsByRanges(contentRanges,frontRanges,stripText,pages,breakMode,pageMode,roman,tocMap)
+  else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode,0,roman)
+  [pgLinks,changedDocs,adoMap] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pages,pageLocations,adobeMap,roman)
   repDict = fillDict(changedDocs,docs,docStats)
   # finally, we save all our changed files into a new EPUB.
-  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict,adoMap)
+  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset,roman):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict,adoMap)

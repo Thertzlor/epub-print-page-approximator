@@ -15,6 +15,7 @@ def relativePath(pathA:str,pathB:str):
 def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_paginated'):
   """Function to generate an output path for the new EPUB based on user preferences"""
   pathSplit = oldPath.split("/")
+  if(len(pathSplit) == 1):pathSplit = oldPath.split("\\")
   oldFileName = pathSplit.pop()
   # if there's a new name, the suffix isn't necessary.
   if newName is not None:suffix = ''
