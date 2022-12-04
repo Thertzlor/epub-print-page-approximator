@@ -68,5 +68,5 @@ def processToC(toc:list,mapping:list[int|str],knownPages:dict[int,str],docs:list
   tocData = getTocLocations(toc,docs,stripSplits,docStats)
   pageOne = next((i for [i,x] in enumerate(mapping) if x == 1),None)
   if pageOne is None: return ([],createRange(mapping,tocData,knownPages))
-  [frontMap,contentMap] = [createRange(x,o,knownPages,i,pageOffset if n == 1 else 0) for [n,[x,o,i]] in enumerate(((mapping[0:pageOne],tocData[0:pageOne],0),(mapping[pageOne:],tocData[pageOne:],tocData[pageOne-1][1])))]
+  [frontMap,contentMap] = [createRange(x,o,knownPages,i,pageOffset) for [x,o,i] in ((mapping[0:pageOne],tocData[0:pageOne],0),(mapping[pageOne:],tocData[pageOne:],tocData[pageOne-1][1]))]
   return (frontMap,contentMap)
