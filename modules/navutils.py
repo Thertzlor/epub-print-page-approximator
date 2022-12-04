@@ -23,7 +23,7 @@ def processNavigations(epub3Nav:EpubNav,ncxNav:EpubHtml,pgLinks:list[str],repDic
   return True 
 
 
-def makePgMap(linkList:list[str],pageOffset = 1,roman=0):
+def makePgMap(linkList:list[str],pageOffset = 1,roman:int=0):
   pgMap:etree.ElementBase = etree.fromstring('<?xml version="1.0" ?><page-map xmlns="http://www.idpf.org/2007/opf"></page-map>')
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return pgMap.makeelement(name,attributes)
   def makeTarget(number:int,offset=0):

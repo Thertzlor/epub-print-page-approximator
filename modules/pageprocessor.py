@@ -6,16 +6,15 @@ from ebooklib.epub import EpubHtml, etree, read_epub, zipfile
 
 from modules.helperfunctions import romanize, romanToInt
 from modules.navutils import makePgMap, prepareNavigations, processNavigations
-from modules.nodeutils import (addPageMapRefs, getBookContent, getNodeForIndex,
-                               insertAtPosition)
+from modules.nodeutils import addPageMapRefs, getBookContent, insertAtPosition
 from modules.pathutils import pageIdPattern, pathProcessor
 from modules.progressbar import mapReport
 from modules.statisticsutils import lineSplitter, outputStats, pagesFromStats
 from modules.tocutils import checkToC, processToC
 
-calculatedSizes:list[int]= []
+calculatedSizes:list[int|float]= []
 
-def overrideZip(src:str,dest:str,repDict:dict={},pageMap:str=None):
+def overrideZip(src:str,dest:str,repDict:dict={},pageMap:str|None=None):
   """Zip replacer from the internet because for some reason the write method of the ebook library breaks HTML"""
   with zipfile.ZipFile(src) as inZip, zipfile.ZipFile(dest, "w",compression=zipfile.ZIP_DEFLATED) as outZip:
     # Iterate the input files
@@ -61,32 +60,50 @@ def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,off
   return pgList if offset == 0 else [p+offset for p in pgList]
 
 
-def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],frontRanges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars',roman:int|None=None,tocMap:tuple[int|str]=()):
+def getSingleLocation(lastPage:int,ranges:list[tuple[int,int,int]]):
+  offset = 0
+  lastLocation = 0
+  for [_,end,numPages] in ranges:
+    offset = offset+ numPages
+    if offset >= lastPage:
+      lastLocation = end
+      break
+  return lastLocation
+
+
+def processRomans(roman:int|None,ranges:list[tuple[int,int,int]],frontRanges:list[tuple[int,int,int]],stripText:str,knownRomans:tuple[str],tocMap:tuple[int|str],pages:int,breakMode:str,pageMode:str|int):
+  if roman is None: roman = 0
+  pageOne = next((i for [i,x] in enumerate(tocMap) if x == 1),None)
+  if pageOne is None: raise LookupError('ToC map needs to define the location of page 1 for compatibility with Roman numerals for front matter')
+  frontEnd = ranges[0][0]
+  frontText = stripText[0:frontEnd]
+  [_,contentMapped] = approximatePageLocationsByRanges(ranges,[],stripText,pages,breakMode,pageMode)
+  if roman == 0 or len(knownRomans) != 0:
+    lastKnownRoman = romanToInt(knownRomans[-1]) if len(knownRomans) != 0 else 0
+    lastRomanLocation = getSingleLocation(lastKnownRoman,frontRanges)
+    frontDef = floor(sum(calculatedSizes)/len(calculatedSizes)) if lastRomanLocation == 0 else floor(lastRomanLocation/lastKnownRoman)
+    roman = max(pagesFromStats(frontText,pageMode,frontDef) if roman == 0 else roman,lastKnownRoman) 
+    if len(frontRanges) == 0: frontRanges = [(0,frontEnd,roman)]
+    elif frontEnd-frontRanges[-1][1] != 0:
+      sectionPages = pagesFromStats(frontText[frontRanges[-1][1]:],pageMode,frontDef)
+      roman = roman + sectionPages-1
+      frontRanges.append((frontRanges[-1][1],frontEnd,sectionPages))
+  [_,frontMapped] = approximatePageLocationsByRanges(frontRanges,[],frontText,roman,breakMode,pageMode)
+  return (roman,frontMapped+contentMapped)
+
+
+def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],frontRanges:list[tuple[int,int,int]],stripText:str,pages = 5, breakMode='split', pageMode:str|int='chars',roman:int|None=None,tocMap:tuple[int|str]=tuple()):
   """This is the page location function used if we know not just how many pages are in a book, but also where specific pages are.\n
   The content of each tuple in the ranges argument is the range start, range end and the number of pages within that range."""
-  knownRomans = [x for x in tocMap if isinstance(x,str)]
-  if roman is not None or len(knownRomans) != 0:
-    if roman is None: roman = 0
-    pageOne = next((i for [i,x] in enumerate(tocMap) if x == 1),None)
-    if pageOne is None: raise LookupError('ToC map needs to define the location of page 1 for compatibility with Roman numerals for front matter')
-    frontEnd = ranges[0][0]
-    frontText = stripText[0:frontEnd]
-    [_,contentMapped] = approximatePageLocationsByRanges(ranges,(),stripText,pages,breakMode,pageMode)
-    if roman == 0 or len(knownRomans) != 0:
-      lastKnownRoman = romanToInt(knownRomans[-1]) if len(knownRomans) != 0 else 0
-      frontDef = floor(sum(calculatedSizes)/len(calculatedSizes))
-      roman = max(pagesFromStats(frontText,pageMode,frontDef) if roman == 0 else roman,lastKnownRoman) 
-      if len(frontRanges) == 0: frontRanges = [(0,frontEnd,roman)]
-    print(frontEnd,frontRanges,ranges)
-    [_,frontMapped] = approximatePageLocationsByRanges(frontRanges,(),frontText,roman,breakMode,pageMode)
-    return (roman,frontMapped+contentMapped)
+  knownRomans = tuple(x for x in tocMap if isinstance(x,str))
+  if roman is not None or len(knownRomans) != 0: return processRomans(roman,ranges,frontRanges,stripText,knownRomans,tocMap,pages,breakMode,pageMode)
 
   pageLocations:list[int] = []
   processedPages = 0
   for [start,end,numPages] in ranges: 
     pageLocations = pageLocations + approximatePageLocations(stripText[start:end],numPages,breakMode,pageMode,start)
     processedPages = processedPages + numPages
-  lastRange = ranges[-1]
+  lastRange = ranges[-1] if len(ranges) != 0 else (0,0,0)
   pagesRemaining = pages - processedPages
   if pagesRemaining != 0: 
     pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
@@ -100,6 +117,21 @@ def approximatePageLocationsByWords(stripped:str,pages:int,offset:int):
     calculatedSizes.append(pgSize)
     pgListW = [wordMatches[round(pgSize*i)] for i in range(pages)]
     return pgListW if offset == 0 else [p+offset for p in pgListW]
+
+
+def shiftPageListing(pgList:list[int],stripped:str,pgSize:int, breakMode:str):
+    for [i,p] in enumerate(pgList):
+      # getting the text of the current page.
+      page = stripped[p:p+pgSize]
+      # the 'prev' mode uses the same operations as the 'next' mode, just on the reversed string.
+      if breakMode == 'prev': page = page[::-1]
+      # finding the next/previous whitespace character.
+      nextSpace = search(r'\s',page)
+      # If we don't find any whitespace we just leave the break where it is.
+      if nextSpace is None: continue
+      # in the 'prev' mode we need to subtract the index we found.
+      pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
+      return pgList
 
 
 def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0,roman:int|None=None) -> list[int]:
@@ -116,23 +148,13 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
   pgList = [i*pgSize for i in range(pages)]
   # the 'split' break mode does not care about breaking pages in the middle of a word, so nothing needs to be done.
   if breakMode == 'split': return pgList
-  for [i,p] in enumerate(pgList):
-    # getting the text of the current page.
-    page = stripped[p:p+pgSize]
-    # the 'prev' mode uses the same operations as the 'next' mode, just on the reversed string.
-    if breakMode == 'prev': page = page[::-1]
-    # finding the next/previous whitespace character.
-    nextSpace = search(r'\s',page)
-    # If we don't find any whitespace we just leave the break where it is.
-    if nextSpace is not None:
-      # in the 'prev' mode we need to subtract the index we found.
-      pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
+  pgList = shiftPageListing(pgList,stripped,pgSize,breakMode)
   return pgList if offset == 0 else [p+offset for p in pgList]
 
 
 def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={},pageOffset=1,roman=0):
   """Function for mapping page locations to actual page break elements in the epub's documents."""
-  changedDocs:list[str] = []
+  changedDocs:list[int] = []
   pgLinks:list[str]=[]
   # We use currentIndex and currentIndex to keep track of which document ranges we need.
   for [i,[pg,docIndex]] in enumerate(pagesMapped):
@@ -146,14 +168,14 @@ def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],d
     # no need to insert a break in that case either
     if docLocation == 0: continue 
     # making our page breaker
-    breakSpan:etree.ElementBase = doc.makeelement('span')
+    breakSpan:etree.ElementBase = doc.makeelement('span',None,None)
     breakSpan.set('id',f'pg_break_{i}')
     # page breaks don't have text, but they do have a value.
     breakSpan.set('value',str(realPage))
     # EPUB2 does not support the epub: namespace.
     if epub3Nav is not None:breakSpan.set('epub:type','pagebreak')
     # we don't recalculate the ranges because page breaks do not add any text.
-    insertAtPosition(getNodeForIndex(docLocation,docRanges),breakSpan)
+    insertAtPosition(docLocation,docRanges,breakSpan)
     # noting the filename of every document that was modified.
     if docIndex not in changedDocs: changedDocs.append(docIndex)
   return [pgLinks,changedDocs]
@@ -181,11 +203,16 @@ def mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,page
   return (pgLinks,changedDocs,adoMap)
 
 
-def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int|str]=(),adobeMap=False,suggest=False,auto=False,roman:int|str|None=None):
-  """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
+def getPagesAndRomans(pages:int,roman:str|int|None):
   pages = int(pages) if search(r'^\d+$', pages) else pages
   if roman == 'auto': roman = 0
   elif roman is not None and type(roman) != int: roman = romanToInt(roman)
+  return (pages,roman)
+
+
+def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int|str]=tuple(),adobeMap=False,suggest=False,auto=False,roman:int|str|None=None):
+  """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
+  (pages,roman) = getPagesAndRomans(pages,roman)
   pub = read_epub(path)
   useToc = len(tocMap) != 0
   if not checkValidConstellations(suggest,auto,useToc,tocMap,pub.toc): return

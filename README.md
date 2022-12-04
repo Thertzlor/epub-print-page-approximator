@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.1.5-blue)
+![version](https://img.shields.io/badge/version-1.1.6-blue)
 [![CodeFactor](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/badge/main)](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/overview/main)
 ![license](https://img.shields.io/github/license/Thertzlor/epub-print-page-approximator) 
 # Print Page Approximator for EPUB and EPUB3
@@ -11,7 +11,6 @@ However, with the exceptions of some very high end digital releases, most ebooks
 This script offers a quick and easy, if not super accurate alternative and all you need is the ebook and the number of pages you know the book has.  
 You can also generate a cust9om page count based on a specific number of characters, lines or words per page.
 
----
 ## Usage
 ```powershell
 py .\page_approximator.py .\example_book.epub 150
@@ -23,7 +22,6 @@ You can also download the pre-built executable for 64bit Windows from the [Relea
 ### Dependencies
 This script requires the `ebooklib` python library.
 
----
 ## Command-line Arguments
 ### positional:
 * **filepath**: Path to the EPUB file you wish to paginate.
@@ -31,6 +29,7 @@ This script requires the `ebooklib` python library.
 ### options:
 * **-p , --pagingmode**: Define how to divide pages. "chars" uses a fixed number of characters per page, "lines" a fixed number of lines/paragraphs, and "words" a fixed number of words. Enter a number to use the "lines" mode with a maximum number of characters per line. Default is "chars". See section [Paging Modes](#paging-modes) for details.
 * **-t, --tocpages**: A list of page numbers to be mapped to the ebook's chapter markers. See section [ToC Pages](#toc-pages) for details.
+* **-r, --romanfrontmatter**: The number of pages with Roman numerals in the front matter. Can be in the form of a Roman numeral or a normal integer see [Roman numerals section](#front-matter-with-roman-numbering) for details.
 * **-b , --breakmode**: Behavior if a pagebreak is generated in the middle of a word; `next` will go to the next whitespace, `prev` to the previous, `split` will simply keep the break inside the word.
 * **-s , --suffix**: Suffix for the newly generated EPUP file. Defaults to `"_paginated"`.
 * **-n , --name**: A new name for the newly generated EPUB file. Overrides the `--suffix` argument.
@@ -43,7 +42,6 @@ This script requires the `ebooklib` python library.
 * **--autopage**: Use the value of the 'pages' argument as the definition of a single page according to the current pagingmode and generate an automatic page count. For details see section [Automatic Pagination](#automatic-pagination)
 * **--suggest**: Only display automatically generated page count without applying it to the file. Only works if the `--autopage` flag is also set.
 
----
 ## How?
 The script will generate the pagination as follows:
 1. Extract the book text* from the EPUB HTML.
@@ -57,10 +55,10 @@ Suffice to say that since everything is indeed only an *approximation*, so expec
 
 *Page Approximator defines the text of the book as the text within all HTML tags that can reasonably be assumed to be visible to the reader.
 
----
 ## Advanced Pagination
 In case the page approximations produced by the script's default settings are not accurate enough, Print Page Approximator includes a few more advanced options for modifying the output.
 
+---
 ### Paging Modes
 Using the `-p` or `--pagingmode` argument you can choose how the script will go about actually defining page breaks.
 
@@ -69,6 +67,7 @@ Using the `-p` or `--pagingmode` argument you can choose how the script will go 
 * **"words"**: In this mode the text will be split into individual words [defined as any sequence of non-whitespace characters; The output of the Python str.split()] and then calculates the average number of words on a page based on the total number of words in the text.
 * ***number***: The final and most advanced paging mode is activated by passing a number as the argument. It works by using the `lines` mode and applying the provided number as a maximum character count per line. Shorter lines are left as-is, longer lines are split up. This can give you very accurate results, especially if you use the line length of the print edition as a reference (It's still not perfect of course, unless the book is typeset in a monospace font).
 
+---
 ### ToC Pages
 Back in the days of paper many physical books had a table of contents which included page numbers because paper didn't support links. The `-t` or `--tocpages` argument lets us use this ancient knowledge to guarantee that our generated page numbers don't get too inaccurate.  
 The only requirement is that our ebook has a functioning table of contents as well.
@@ -88,9 +87,40 @@ Should we only want to map every second chapter we can modify our previous examp
 py .\page_approximator.py ".\book.epub" 100 --tocpages 5 0 50 0 90
 ```
 
-If one of the entries in the `--tocpages` list specifies page 1, and the location of that file is not the absolute beginning of the book, the script will automatically add a "0th" page onto which all content before the new first page will be pushed.  
-[Side note: In proper publishing such front matter before page 1 would be numbered in Roman numerals. Maybe at some point I'll feel fancy enough to implement that.]
+If one of the entries in the `--tocpages` list specifies page 1, and the location of that file is not the absolute beginning of the book, the script will automatically add a "0th" page onto which all content before the actual first page will be pushed.  
+According to "proper" publishing convention the front matter before page 1 should be numbered in Roman numerals, which is the subject of the next section.
 
+---
+### Front Matter with Roman numbering
+The `--romanfrontmatter` option, shortened to `-r` lets us define a front section of the book paginated with Roman numerals before resetting the pagination for the main content.
+
+In this example we keep things simple, using only the page count without a ToC map:
+```powershell
+py .\page_approximator.py ".\book.epub" 100 --romanfrontmatter 5
+```
+This tells the script that the first 5 pages are front matter. Note that in this mode the page number argument refers to the total number of pages in the book *including* front matter, so since the numbering restarts after the 5 Roman numerals we only have 95 normal pages.
+
+To get back up to 100 normal pages we have to add the 5 pages to the total once more:
+```powershell
+py .\page_approximator.py ".\book.epub" 105 --romanfrontmatter 5 
+```
+This complication does not apply if we are using a ToC map, because in this case the script knows exactly where the first real page of the book starts and calculates the provided number of pages only within the "main text" of the book.
+
+In the following example we assume a book that has a single section before the main content starts at page **1**. Using the `--romanfrontmatter` option we tell the script that this first section consists of 5 pages with roman numbering.
+Note that is required to specify a location for the first page in the ToC map when this option is set.
+```powershell
+py .\page_approximator.py ".\book.epub" 100 --tocpages 0 1 5 20 50 70 90 --romanfrontmatter 5
+```
+Alternatively it's also possible to pass `--romanfrontmatter 0` which tells the script to decide for itself how many front matter pages to insert, based on the average page size of the main text.
+
+Alternatively the ToC map itself can be used to indicate and further control pages with roman numerals:
+```powershell
+py .\page_approximator.py ".\book.epub" 100 --tocpages i iv 1 5 20 50 70 90
+```
+In this example it is not necessary to set the `--romanfrontmatter` option since we have the roman numbering already in the page map.  
+In this book we have two sections before the first content page, defined with their roman numbers. How many front matter pages will be inserted between iv and 1 is again calculated via the average page size, although it is possible to pass the `--romanfrontmatter` option to indicate the total number of front matter pages explicitly. Like in the normal section of the page map it is also possible to "skip" sections by filling in a 0 in their spot.
+
+---
 ### A Complete Demonstration
 This section will showcase the full process of paginating a book as precisely as possible using all techniques previously discussed.  
 As our example book we will use *The Sirens of Titan* by Kurt Vonnegut, (named `sirens.epub` to keep things concise) with the data about the print version taken from [Google Books]("https://books.google.com/books?id=YuLuAn3itnAC") (the first time this service has been useful to me).
@@ -111,16 +141,19 @@ To get truly accurate, we'll have to use the table of contents directly, especia
 
 The twelve chapters listed in the print edition's Table of Content start on the following pages: `1 41 62 95 105 143 167 187 199 218 256 270 308`  
 ...But we need to modify this list before using it since the digital edition of the book includes five more content markers before the first chapter: "Praise", "Title Page", "Copyright Page", "Table of Contents" and "Epigraph".  
-These need to be included in our page mapping but as far as our table of contents is concerned, the actual first page starts at the first chapter, so we represent that by having those first 5 entries in our page list set to **0**.
-
-Putting everything together, the final pagination command looks like this (using the shortened arguments for brevity):
+These need to be included in our page mapping but as far as our table of contents is concerned, the actual first page starts at the first chapter, so we represent that by having those first 5 entries in our page list set to **0**:
 
 ```powershell
 py .\page_approximator.py ".\sirens.epub" 336 -p 56 -t 0 0 0 0 0 1 41 62 95 105 143 167 187 199 218 256 270 308
 ```
-Now the final output is as good as it gets, with all chapters on the right page and thanks to the number of sample points the pages in-between are accurate to within a few lines.
+But to have the book paginated "properly" the section that is now page "0" should instead be paginated with Roman numerals. The table of contents does not tell us how many of those pages there are so, we set the `-r` option to **0** and let the script decide how many to generate:
 
----
+```powershell
+py .\page_approximator.py ".\sirens.epub" 336 -p 56 -t 0 0 0 0 0 1 41 62 95 105 143 167 187 199 218 256 270 308 -r 0
+```
+
+Now the final output is as good as it gets, with all chapters on the right pages, Roman numerals in the front matter and thanks to the number of sample points the pages in-between are accurate to within a few lines.
+
 ## Automatic Pagination
 If rather then applying a predefined page count you want the script to estimated a page count based on custom parameters you can use the `--autopage` flag. This option changes the function of the primary `pages` argument from defining the final number of pages to setting the size of a single page.
 As an example:
@@ -143,7 +176,6 @@ The numeric `--pagingmode` argument for maximum line length also works in this m
 ### Technical Notes
 The difference between this automatic pagination of and the similar methods used for *Adobe Digital Editions* page numbers or Kindle "Locations" is that the latter two calculate pages based on the full contents of the HTML files. *Print Page Approximator* omits all HTML tags and other markup, trying to consider only the *actually readable* text of each file.
 
----
 ## Caveats
 As a general rule, if you are processing books predominantly written in non-Latin based alphabets, especially with writing systems featuring different reading directions, non-space word boundaries or generally very different characters such as, Japanese, Arabic, Chinese or Braille I can't guarantee any sane results.
 
@@ -156,5 +188,4 @@ Heavily illustrated books are also going to produce less reliable results since 
 
 ## Roadmap
 * More general testing of ebook compatibility.
-* Roman numeral support for front matter.
 * Maybe supporting playOrder for EPUB2.

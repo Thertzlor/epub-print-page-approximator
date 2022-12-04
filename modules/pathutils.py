@@ -1,3 +1,5 @@
+import os.path as p
+
 def relativePath(pathA:str,pathB:str):
   """A function to adjust link paths in case the navigation and content documents are in the same path."""
   [splitA,splitB] = tuple(x.split('/') for x in (pathA,pathB))
@@ -12,7 +14,7 @@ def relativePath(pathA:str,pathB:str):
   return '/'.join(splitB[pathDiff:])
 
 
-def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_paginated'):
+def pathProcessor(oldPath:str,newPath:str|None=None,newName:str|None=None,suffix:str='_paginated'):
   """Function to generate an output path for the new EPUB based on user preferences"""
   pathSplit = oldPath.split("/")
   if(len(pathSplit) == 1):pathSplit = oldPath.split("\\")
@@ -23,7 +25,7 @@ def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_pag
   # the epub extension may be omitted, but in case it isn't we cut it off here.
   if finalName.lower().endswith('.epub'): finalName = finalName[:-5]
   # putting the path back together
-  return f'{newPath or "/".join(pathSplit)}{finalName}{suffix}.epub'
+  return p.join(newPath or p.join(pathSplit),f'{finalName}{suffix}.epub')
 
 
 def pageIdPattern(num:int,prefix = 'pg_break_'):

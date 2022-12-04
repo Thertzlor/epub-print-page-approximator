@@ -21,7 +21,7 @@ def flattenToc(b:list,links:list[str]=[]):
   return links
 
 
-def checkToC(toc:list,mapping:tuple[int|int]):
+def checkToC(toc:list,mapping:tuple[int|str]):
   """Check if the contents of our page mapping matches the actual table of contents in the book."""
   if len(flattenToc(toc)) == len(mapping): return True
   print('The manual chapter map must have the same number of entries as the Table of Contents of the ebook.\n The current ToC Data has the following entries:')
@@ -63,10 +63,10 @@ def createRange(mapping:list[int|str],tocData:list[tuple[str, int]],knownPages:d
   return ranges
 
 
-def processToC(toc:list,mapping:list[int|str],knownPages:dict[int,str],docs:list[EpubHtml],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],pageOffset:int)-> tuple[list[tuple[int, int, int]], list[tuple[int, int, int]]]:
+def processToC(toc:list,mapping:list[int|str],knownPages:dict[int|str,str],docs:list[EpubHtml],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],pageOffset:int)-> tuple[list[tuple[int, int, int]], list[tuple[int, int, int]]]:
   """Using our page  map and ToC to define ranges within the book text"""
   tocData = getTocLocations(toc,docs,stripSplits,docStats)
   pageOne = next((i for [i,x] in enumerate(mapping) if x == 1),None)
   if pageOne is None: return ([],createRange(mapping,tocData,knownPages))
-  [frontMap,contentMap] = [createRange(x,o,knownPages,i,pageOffset if n == 1 else 0) for [n,[x,o,i]] in enumerate(((mapping[0:pageOne],tocData[0:pageOne],0),(mapping[pageOne:],tocData[pageOne:],tocData[pageOne-1][1])))]
+  [frontMap,contentMap] = [createRange(x,o,knownPages,i,pageOffset) for [x,o,i] in ((mapping[0:pageOne],tocData[0:pageOne],0),(mapping[pageOne:],tocData[pageOne:],tocData[pageOne-1][1]))]
   return (frontMap,contentMap)

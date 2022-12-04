@@ -175,9 +175,9 @@ def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,stripp
   parentNode.tail = newParentTail
 
 
-def insertAtPosition(positionData:tuple[etree.ElementBase,int,int],newNode:etree.ElementBase):
+def insertAtPosition(docLocation:int,docRanges:list[tuple[etree.ElementBase, int, int]],newNode:etree.ElementBase):
   """Takes a node position object (output from getNodeFromLocation()) and inserts a new node at that spot."""
-  [el,fromStart,fromEnd] = positionData
+  [el,fromStart,fromEnd] = getNodeForIndex(docLocation,docRanges)
   # in some cases we can simply use the tail or text insertion functions directly.
   if el.text is not None and len(el.text) > fromStart: return insertIntoText(newNode,el,fromStart)
   if el.tail is not None and len(el.tail) > fromEnd: return insertIntoTail(newNode,el,len(el.tail)-fromEnd)
