@@ -14,7 +14,7 @@ def relativePath(pathA:str,pathB:str):
   return '/'.join(splitB[pathDiff:])
 
 
-def pathProcessor(oldPath:str,newPath:str=None,newName:str=None,suffix:str='_paginated'):
+def pathProcessor(oldPath:str,newPath:str|None=None,newName:str|None=None,suffix:str='_paginated'):
   """Function to generate an output path for the new EPUB based on user preferences"""
   pathSplit = oldPath.split("/")
   if(len(pathSplit) == 1):pathSplit = oldPath.split("\\")
