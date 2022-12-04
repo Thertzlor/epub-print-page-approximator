@@ -88,7 +88,6 @@ def processRomans(roman:int|None,ranges:list[tuple[int,int,int]],frontRanges:lis
       sectionPages = pagesFromStats(frontText[frontRanges[-1][1]:],pageMode,frontDef)
       roman = roman + sectionPages-1
       frontRanges.append((frontRanges[-1][1],frontEnd,sectionPages))
-  print(frontEnd,frontRanges,ranges[0])
   [_,frontMapped] = approximatePageLocationsByRanges(frontRanges,[],frontText,roman,breakMode,pageMode)
   return (roman,frontMapped+contentMapped)
 
