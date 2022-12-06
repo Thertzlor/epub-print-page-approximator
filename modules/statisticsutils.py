@@ -25,7 +25,7 @@ def pagesFromStats(text:str,pageMode:str|int,pageDef:int):
   return ceil(lines/pageDef)
 
 
-def outputStats(text,pageMode):
+def outputStats(text:str,pageMode:str|int):
   print('Displaying book stats...')
   [chars,lines,words] = textStats(text,pageMode)
   print(f'characters:{chars}, lines:{lines}, words:{words}')

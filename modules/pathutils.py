@@ -25,7 +25,8 @@ def pathProcessor(oldPath:str,newPath:str|None=None,newName:str|None=None,suffix
   # the epub extension may be omitted, but in case it isn't we cut it off here.
   if finalName.lower().endswith('.epub'): finalName = finalName[:-5]
   # putting the path back together
-  return p.join(newPath or p.join(pathSplit),f'{finalName}{suffix}.epub')
+  if len(pathSplit) == 0: pathSplit.append('./')
+  return p.join(newPath or p.join(*pathSplit),f'{finalName}{suffix}.epub')
 
 
 def pageIdPattern(num:int,prefix = 'pg_break_'):

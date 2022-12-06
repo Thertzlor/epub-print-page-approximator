@@ -131,7 +131,7 @@ def shiftPageListing(pgList:list[int],stripped:str,pgSize:int, breakMode:str):
       if nextSpace is None: continue
       # in the 'prev' mode we need to subtract the index we found.
       pgList[i] = (p + nextSpace.start() * (1 if breakMode == 'next' else -1))
-      return pgList
+    return pgList
 
 
 def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMode:str|int='chars',offset=0,roman:int|None=None) -> list[int]:
@@ -152,7 +152,7 @@ def approximatePageLocations(stripped:str, pages = 5, breakMode='split', pageMod
   return pgList if offset == 0 else [p+offset for p in pgList]
 
 
-def mapPages(pages:int,pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={},pageOffset=1,roman=0):
+def mapPages(pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]], dict[str, int]]],docs:list[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int,str]={},pageOffset=1,roman=0):
   """Function for mapping page locations to actual page break elements in the epub's documents."""
   changedDocs:list[int] = []
   pgLinks:list[str]=[]
@@ -194,23 +194,30 @@ def fillDict(changedDocs,docs,docStats):
   return repDict
 
 
-def mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pages,pageLocations,adobeMap,roman:int|None):
+def mappingWrapper(stripSplits:list[str],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]]]],docs:tuple[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int|str,str],pageOffset:int,pageLocations:list[int],adobeMap:bool,roman:int|None):
   [pgLinks,changedDocs] = mapPages(
-    pages,tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) 
+    tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) 
     for pg in pageLocations),stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,roman
     )
   adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset,roman)
   return (pgLinks,changedDocs,adoMap)
 
 
-def getPagesAndRomans(pages:int,roman:str|int|None):
+def getPagesAndRomans(pages:int|str,roman:str|int|None):
   pages = int(pages) if search(r'^\d+$', pages) else pages
   if roman == 'auto': roman = 0
   elif roman is not None and type(roman) != int: roman = romanToInt(roman)
   return (pages,roman)
 
 
-def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int|str]=tuple(),adobeMap=False,suggest=False,auto=False,roman:int|str|None=None):
+def sortDocuments(docs:tuple[EpubHtml],spine:list[tuple[str,bool]],nonlinear="append",unlisted="ignore"):
+  nonLinearSort = -1 if nonlinear == 'append' else 1
+  spineIds = tuple(x[0] for x in tuple(sorted(spine,key=lambda x: nonLinearSort * (1 if x[1]=='yes' else -1))) if (nonlinear != 'ignore' or x[1]=='yes'))
+  # sorting the documents by the order they are referenced in the spine
+  return docs if len(spineIds) == 0 else tuple(sorted([x for x in docs if (unlisted != "ignore" or x.id in spineIds)],key= lambda d: spineIds.index(d.id) if d.id in spineIds else float('inf' if unlisted == 'append' else '-inf')))
+
+
+def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int|str]=tuple(),adobeMap=False,suggest=False,auto=False,roman:int|str|None=None,nonlinear="append",unlisted="ignore"):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   (pages,roman) = getPagesAndRomans(pages,roman)
   pub = read_epub(path)
@@ -218,7 +225,7 @@ def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noN
   if not checkValidConstellations(suggest,auto,useToc,tocMap,pub.toc): return
   [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
-  docs = tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml))
+  docs = sortDocuments(tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)),pub.spine,nonlinear,unlisted)
   # we might have a book that starts at page 0
   pageOffset = 1
   # processing the book contents.
@@ -230,7 +237,7 @@ def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noN
     if suggest:return print(f'Suggested page count: {pages}')
     print(f'Generated page count: {pages}')
   print('Starting pagination...')
-  knownPages:dict[int,str] = {}
+  knownPages:dict[int|str,str] = {}
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   pageLocations:list[int]
   if useToc:
@@ -240,7 +247,7 @@ def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noN
     [frontRanges,contentRanges] = processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats,pageOffset)
     [roman,pageLocations] = approximatePageLocationsByRanges(contentRanges,frontRanges,stripText,pages,breakMode,pageMode,roman,tocMap)
   else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode,0,roman)
-  [pgLinks,changedDocs,adoMap] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pages,pageLocations,adobeMap,roman)
+  [pgLinks,changedDocs,adoMap] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pageLocations,adobeMap,roman)
   repDict = fillDict(changedDocs,docs,docStats)
   # finally, we save all our changed files into a new EPUB.
   if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset,roman):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict,adoMap)

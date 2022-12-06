@@ -8,7 +8,7 @@ def printProgressBar(iteration:int, total:int, prefix = '', suffix = '', decimal
   if iteration == total: 
     print()
 
-def mapReport(a,b, t='Mapping page break'):
+def mapReport(a:int,b:int, t='Mapping page break'):
   """simple printout function for mapping progress"""
   printProgressBar(a,b,f'{t} {a} of {b}','Done',2)
   return True

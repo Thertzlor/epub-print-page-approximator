@@ -22,19 +22,8 @@ def romanToInt(s: str) -> int:
     else: summ = summ+num
   return summ
 
-def between (str,pos,around,sep='|'): 
-  """split a string at a certain position, highlight the split with a separator and output a range of characters to either side.\n
-  Used for debugging purposes"""
-  return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
-
 
 def splitStr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
-
-
-def between (str,pos,around,sep='|'): 
-  """split a string at a certain position, highlight the split with a separator and output a range of characters to either side.\n
-  Used for debugging purposes"""
-  return f'{str[pos-around:pos]}{sep}{str[pos:pos+around]}'
 
 
 def toInt(str:str|None): 
