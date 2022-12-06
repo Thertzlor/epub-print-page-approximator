@@ -11,7 +11,7 @@ parser.add_argument('-t','--tocpages', nargs='+', help="A list of page numbers t
 parser.add_argument('-r','--romanfrontmatter', nargs='?', help="The number of pages with Roman numerals in the front matter. Can be in the form of a Roman numeral.",metavar='')
 parser.add_argument('-b','--breakmode', choices=['next','prev','split'], type=str, help="Behavior if a pagebreak is generated in the middle of a word; 'next' goes to the next whitespace, 'prev' to the previous, 'split' will keep the break inside the word",metavar='',default="next")
 parser.add_argument('-l','--nonlinear', choices=['append','prepend','ignore'], type=str, help="How to handle documents that are desginated as 'nonlinear' in the book's spine.",metavar='',default="append")
-parser.add_argument('-u','--unlisted', choices=['append','prepend','ignore'], type=str, help="How to handle documents that have an ID which is not listed in the book's spine",metavar='',default="ignore")
+parser.add_argument('-u','--unlisted', choices=['append','prepend','ignore'], type=str, help="How to handle documents not listed in the book's spine",metavar='',default="ignore")
 parser.add_argument('-s','--suffix', type=str, help="Suffix for the newly generated EPUP file. Defaults to '_paginated'",metavar='',default='_paginated',nargs='?',const='')
 parser.add_argument('-n','--name', type=str, help="A new name for the newly generated EPUB file. Overrides the --suffix argument",metavar='')
 parser.add_argument('-o','--outpath', type=str, help="Save path for the output file. Does not include file name",metavar='')

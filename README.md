@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.1.6-blue)
+![version](https://img.shields.io/badge/version-1.1.7-blue)
 [![CodeFactor](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/badge/main)](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/overview/main)
 ![license](https://img.shields.io/github/license/Thertzlor/epub-print-page-approximator) 
 # Print Page Approximator for EPUB and EPUB3
@@ -34,6 +34,8 @@ This script requires the `ebooklib` python library.
 * **-s , --suffix**: Suffix for the newly generated EPUP file. Defaults to `"_paginated"`.
 * **-n , --name**: A new name for the newly generated EPUB file. Overrides the `--suffix` argument.
 * **-o , --outpath**: Save path for the output file. Does not include file name.
+* **-l , --nonlinear** Choose how to handle documents that are desginated as 'nonlinear' in the book's spine. Valid values are `append`, `prepend` and `ignore`. The default value is `append`.
+* **-u , --unlisted** Choose how to handle documents not listed in the book's spine. Valid values are `append`, `prepend` and `ignore`. The default value is `ignore`.
 * **-h, --help**: show help message and exit.
 ### flags
 * **--noncx**: Do not insert a pageList Element into the EPUB2 ToC NCX file.
@@ -53,7 +55,7 @@ The script will generate the pagination as follows:
 
 Suffice to say that since everything is indeed only an *approximation*, so expect the produced numbers to be a few pages off compared to the print edition.  
 
-*Page Approximator defines the text of the book as the text within all HTML tags that can reasonably be assumed to be visible to the reader.
+*Page Approximator defines the text of the book as the text within all HTML tags that can reasonably be assumed to be visible to the reader, documents sorted by the order they are listed in the book's spine.
 
 ## Advanced Pagination
 In case the page approximations produced by the script's default settings are not accurate enough, Print Page Approximator includes a few more advanced options for modifying the output.
