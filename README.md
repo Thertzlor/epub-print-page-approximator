@@ -9,7 +9,7 @@ This is why both EPUB2 and EPUB3 standards support so called "print page" refere
 However, with the exceptions of some very high end digital releases, most ebooks don't implement this feature (most ebook reader apps also do not support it, but that's their loss, [KOreader](https://github.com/koreader/koreader), is a great option that does). So you are stuck with dynamic pages unless you own the print version and painstakingly insert hundreds page breaks by hand in an EPUB editor.
 
 This script offers a quick and easy, if not super accurate alternative and all you need is the ebook and the number of pages you know the book has.  
-You can also generate a cust9om page count based on a specific number of characters, lines or words per page.
+You can also generate a custom page count based on a specific number of characters, lines or words per page.
 
 ## Usage
 ```powershell
@@ -46,14 +46,14 @@ This script requires the `ebooklib` python library.
 
 ## How?
 The script will generate the pagination as follows:
-1. Extract the book text* from the EPUB HTML.
+1. Extract the book's text* from the EPUB HTML.
 2. Divide the text equally based on the number of pages provided.
 3. Use node manipulation to map the page break locations to their corresponding locations in the HTML files.
 4. Insert invisible page-break span elements at those locations.
 5. Insert the reference list of pages into the navigation file of EPUB3 books or the table of contents NCX file of EPUB2 books (or both if a EPUB3 book contains an NCX as a fallback).
 6. Save the paginated ebook.
 
-Suffice to say that since everything is indeed only an *approximation*, so expect the produced numbers to be a few pages off compared to the print edition.  
+Suffice to say that since everything is indeed only an *approximation*, expect the resulting numbers to be a few pages off compared to the print edition.  
 
 *Page Approximator defines the text of the book as the text within all HTML tags that can reasonably be assumed to be visible to the reader, documents sorted by the order they are listed in the book's spine.
 
