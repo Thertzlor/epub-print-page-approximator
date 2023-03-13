@@ -32,9 +32,10 @@ def overrideZip(src:str,dest:str,repDict:dict={},pageMap:str|None=None):
       # Read input file
       with inZip.open(inZipInfo) as inFile:
         # Sometimes EbookLib does not include the root epub path in its filenames, so we're using endswith.
-        inDict = next((x for x in repDict.keys() if inZipInfo.filename.endswith(x)),None)
+        inDict = next((x for x in repDict.keys() if inZipInfo.filename == x or ('/'.join(inZipInfo.filename.split('/')[1:]) == x)),None)
         if inDict is not None:
           outZip.writestr(inZipInfo.filename, repDict[inDict].encode('utf-8'))
+          repDict.pop(inDict,None)
         # copying non-changed files, saving the mimetype without compression
         else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED)
   print(f'succesfully saved {dest}')
