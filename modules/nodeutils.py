@@ -19,7 +19,7 @@ def addPageMapRefs(opf)-> None|bytes:
   if('page-map.xml' in opfText): None
   myOpf:etree.ElementBase = etree.fromstring(opf)
   spine:etree.ElementBase = myOpf.find('x:spine',xns)
-  if spine is None: 
+  if spine is None:
     spine = myOpf.makeelement('spine',{'page-map':'map'})
     myOpf.append(spine)
   else: spine.set('page-map','map')
@@ -52,7 +52,7 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 
 
   pList:etree.ElementBase = doc.find('x:pageList',xns)
   # the ncx file might already have a pageList element.
-  if(pList is not None): 
+  if(pList is not None):
     if input('EPUB NCX already has a pageList element.\nContinue and overwrite it? [y/N]:').lower() != 'y': return False
     # getting rid of the old element
     pList.getparent().remove(pList)
@@ -80,11 +80,11 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1,r
     link.text=str(romanize(number,roman,offset))
     target.append(link)
     return target
-  
+
   body:etree.ElementBase = doc.find('x:body',xns)
   # perhaps the file already has a page-list navigation element
   oldNav:etree.ElementBase = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
-  if(oldNav is not None): 
+  if(oldNav is not None):
     if input('EPUB3 navigation already has a page-list.\nContinue and overwrite it? [y/N]:').lower() != 'y': return False
     # getting rid of the old element
     oldNav.getparent().remove(oldNav)
@@ -119,7 +119,7 @@ def nodeRanges(node:etree.ElementBase,strippedText:str = None):
     if elId: idLocations[elId] = idx
   for (e,t) in tuple((x,nodeText(x)) for x in node.iter()):
     # finding where in our text the node is located
-    if t == '': 
+    if t == '':
       addId(e,baseIndex)
       continue
     myIndex = strippedText.find(t,baseIndex)
@@ -164,7 +164,6 @@ def insertIntoTail(newNode:etree.ElementBase,parentNode:etree.ElementBase,stripp
     # we do not want to put anything outside the body tag, in that case we insert it at the end.
     if parentNode.tag.lower() == 'body': return parentNode.insert(-1,newNode)
     if parentNode.tag.lower() == 'html': return parentNode.find('x:body',xns).insert(-1,newNode)
-
   newParentTail = parentNode.tail[0:strippedLoc]
   newChildTail = parentNode.tail[strippedLoc:]
   #deleting the old tail, or else it will be added twice
