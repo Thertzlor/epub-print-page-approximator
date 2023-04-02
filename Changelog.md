@@ -2,6 +2,12 @@
 
 All notable changes to the EPUP Page Approximator will be documented here.
 
+## [1.1.8]
+- yes
+- mp
+- Fixed some bugs involving HTML decoding and zip file handling.
+- Guides moved to the new Wiki
+
 ## [1.1.7]
 - The order in which the HTML documents are parsed is now defined by the order they are listed in the spine instead of their order in the content.opf.
 - There are two new options for dealing with special cases pertaining to the book spine. `--nonlinear\-l` for documents with the `linear='no'` setting and `--unlisted\-u` for documents not listed in the spine.

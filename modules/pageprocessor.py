@@ -204,6 +204,7 @@ def mappingWrapper(stripSplits:list[str],docStats:list[tuple[etree.ElementBase, 
     adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset,roman)
     return (pgLinks,changedDocs,adoMap,[])
   else:
+    print(['Huuka',fromExisting])
     [pgLinks,changedDocs,numList] = identifyPageNodes(docStats,docs,fromExisting,pageTag)
     adoMap = None if adobeMap == False else makePgMap(pgLinks,0)
     return (pgLinks,changedDocs,adoMap,numList)
@@ -243,17 +244,18 @@ def processEPUB(path:str,pages:int|str,suffix:str=None,newPath:str=None,newName:
     if suggest:return print(f'Suggested page count: {pages}')
     print(f'Generated page count: {pages}')
   print('Starting pagination...')
+  buildFromTags= type(pages) == str
   knownPages:dict[int|str,str] = {}
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   pageLocations:list[int]=[]
-  if useToc and  type(pages) != str:
+  if useToc and  not buildFromTags:
     if tocMap[0] == 0 and roman is None and next((x for x in tocMap if isinstance(x,str)),None) is None:
       pageOffset = 0
       pages = pages+1
     [frontRanges,contentRanges] = processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats,pageOffset)
     [roman,pageLocations] = approximatePageLocationsByRanges(contentRanges,frontRanges,stripText,pages,breakMode,pageMode,roman,tocMap)
-  elif type(pages) != str: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode,0,roman)
-  [pgLinks,changedDocs,adoMap,numList] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pageLocations,adobeMap,roman,pages,pageTag)
+  elif not buildFromTags: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode,0,roman)
+  [pgLinks,changedDocs,adoMap,numList] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pageLocations,adobeMap,roman,pages if buildFromTags else None,pageTag)
   repDict = fillDict(changedDocs,docs,docStats)
   # finally, we save all our changed files into a new EPUB.
   if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset,roman,numList):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict,adoMap)
