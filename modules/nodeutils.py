@@ -1,8 +1,9 @@
 from ebooklib.epub import EpubHtml, etree
 
-from modules.helperfunctions import romanize
+from modules.helperfunctions import romanize, parseSelectors, matchIdSelector
 from modules.pathutils import relativePath
 from modules.progressbar import mapReport
+from re import search
 
 xns = {'x':'*'}
 """Universal namespace for XML traversals"""
@@ -28,7 +29,7 @@ def addPageMapRefs(opf)-> None|bytes:
   return etree.tostring(myOpf)
 
 
-def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 1,roman=0):
+def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 1,roman=0,numList:list[int|str]=[]):
   """Function to populate a EPUB2 NCX file with our new list of pages."""
   # getting the XML document
   doc:etree.ElementBase = etree.fromstring(ncx.content)
@@ -43,10 +44,10 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 
     label.append(txt)
     return label
 
-  def makeTarget(number:int,offset=0):
+  def makeTarget(number:int,offset=0,replace=None):
     "Generates a pageTargets element containing a content tag with a link to the specified page number"
-    target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(romanize(number,roman,offset))})
-    target.append(makeLabel(romanize(number,roman,offset)))
+    target = tag('pageTarget',{'id':f'pageNav_{number}', 'type':'normal', 'value':str(romanize(replace or number,roman,offset))})
+    target.append(makeLabel(romanize(replace or number,roman,offset)))
     target.append(tag('content',{'src':relativePath(ncx.file_name,linkList[number])}))
     return target
 
@@ -60,7 +61,7 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 
   genList = tag('pageList')
   genList.append(makeLabel('Pages'))
   # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
-  for i in range(len(linkList)): genList.append(makeTarget(i,pageOffset))
+  for i in range(len(linkList)): genList.append(makeTarget(i,pageOffset if i >= len(numList) else  0,None if i >= len(numList) else numList[i]))
   doc.append(genList)
   # inserting the final text of our ncx file into our dictionary of changes.
   # also inserting line breaks for prettier formatting.
@@ -68,16 +69,16 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 
   return True
 
 
-def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1,roman=0):
+def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1,roman=0,numList:list[int|str]=[]):
   """Function to populate a EPUB3 Nav.xhtml file with our new list of pages."""
   doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser())
   # function for generating elements, mostly used to get proper autocomplete
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
-  def makeTarget(number:int,offset=0):
+  def makeTarget(number:int,offset=0,replace=None):
     """generating a list entry with a link to the page break element."""
     target = tag('li')
     link = tag('a',{'href':relativePath(nav.file_name,linkList[number])})
-    link.text=str(romanize(number,roman,offset))
+    link.text=str(romanize(replace or number,roman,offset))
     target.append(link)
     return target
 
@@ -96,7 +97,7 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1,r
   mainNav.append(header)
   lst = tag('ol')
   # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
-  for i in range(len(linkList)): lst.append(makeTarget(i,pageOffset))
+  for i in range(len(linkList)): lst.append(makeTarget(i,pageOffset if i >= len(numList) else  0,None if i >= len(numList) else numList[i]))
   mainNav.append(lst)
   body.append(mainNav)
   # inserting the final text of our nav.xhtml file into our dictionary of changes.
@@ -188,8 +189,56 @@ def insertAtPosition(docLocation:int,docRanges:list[tuple[etree.ElementBase, int
     # The location can only be the tail of one of the child nodes, once we find it, we insert the node.
     if fromStart < offset: return insertIntoTail(newNode,c,len(c.tail or '') - (offset-fromStart))
   # Something has gone very wrong if we don't find any viable location, so we print a warning.
-  print('could not find insertion spot',fromStart,fromEnd)
+  print('Could not find insertion spot',fromStart,fromEnd)
 
+def identifyPageNodes(docs:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]]]],eDocs:list[EpubHtml],nodeSelector:str,attributeSelector:str,isEpub3=False):
+  print('Identifying page markers.')
+  currentPage = 0
+  numList:list[int|str]=[]
+  linkList:list[str]=[]
+  changedList:list[int]=[]
+  [tagFilter,classFilter,attributeFilter,idFilter] = parseSelectors(nodeSelector)
+  attrSplit = None if attributeFilter is None else tuple(x.strip() for x in attributeFilter.split('='))
+  for [i,[d,_,_]] in enumerate(docs):
+    for e in (d.iter()):
+      if ((tagFilter is not None) and e.tag.lower() != tagFilter.lower() ):continue
+      if ((classFilter is not None) and classFilter.lower() not in (e.get('class') or '').lower().split(' ')):continue
+      if ((attrSplit is not None) and ((e.get(attrSplit[0]) is None) if len(attrSplit) == 1 else (e.get(attrSplit[0]) != attrSplit[1]))):continue
+      if ((idFilter is not None) and not matchIdSelector(idFilter,e.get('id'))):continue
+
+      if type(currentPage) == int: currentPage = currentPage+1
+      elPage:str
+      if attributeSelector is not None:
+        elPage = (attributeSelector != '' and e.get(attributeSelector)) or currentPage
+        tNum = None if type(elPage) == int else search(r"(\d+)\D*$",elPage or '')
+        if tNum: elPage = int(tNum[1])
+      else:
+        elPage = e.text
+        tNum = search(r"(\d+)\D*$",elPage or '')
+        if tNum: elPage = int(tNum[1])
+        if not elPage:
+          numatch = search(r"(\d+)\D*$",e.get('id') or '')
+          matchNo = currentPage if numatch is None else int(numatch[1])
+          if matchNo != currentPage: currentPage = matchNo
+          elPage = matchNo
+        else:
+          try: currentPage = int(elPage)
+          except: pass
+
+      if not e.get('id'):
+        e.set('id',f'pg_{currentPage}')
+        if not i in changedList:changedList.append(i)
+      linkList.append(f'{eDocs[i].file_name}#{e.get("id")}')
+
+      if isEpub3 and not e.get('epub:type'):
+        e.set('epub:type','pagebreak')
+        if not i in changedList:changedList.append(i)
+
+      numList.append(currentPage)
+  pageNo = len(numList)
+  if pageNo == 0: raise LookupError(f'Could not find any valid page markers matching the selector {nodeSelector}')
+  print(f'Rebuilding page list from {pageNo} page markers.')
+  return (linkList,changedList,numList)
 
 def getBookContent(docs:list[EpubHtml]):
   """Extract the full text content of an ebook, outputs the text stripped of HTML, a list of document locations within that string and one list of xml documents"""
