@@ -50,14 +50,14 @@ This script requires the `ebooklib` python library.
 
 ## How?
 By default the script will generate the pagination as follows:
-1. Extract the book text* from the EPUB HTML.
+1. Extract the book's text* from the EPUB HTML.
 2. Divide the text equally based on the number of pages provided.
 3. Use node manipulation to map the page break locations to their corresponding locations in the HTML files.
 4. Insert invisible page-break span elements at those locations.
 5. Insert the reference list of pages into the navigation file of EPUB3 books or the table of contents NCX file of EPUB2 books (or both if a EPUB3 book contains an NCX as a fallback).
 6. Save the paginated ebook.
 
-Suffice to say that since everything is indeed only an *approximation*, so expect the produced numbers to be a few pages off compared to the print edition.
+Suffice to say that since everything is indeed only an *approximation*, expect the resulting numbers to be a few pages off compared to the print edition.  
 
 *Page Approximator defines the text of the book as the text within all HTML tags that can reasonably be assumed to be visible to the reader, documents sorted by the order they are listed in the book's spine.
 
