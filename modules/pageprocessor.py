@@ -6,7 +6,7 @@ from ebooklib.epub import EpubHtml, etree, read_epub, zipfile
 
 from modules.helperfunctions import romanize, romanToInt
 from modules.navutils import makePgMap, prepareNavigations, processNavigations
-from modules.nodeutils import addPageMapRefs, getBookContent, insertAtPosition
+from modules.nodeutils import addPageMapRefs, getBookContent, insertAtPosition,identifyPageNodes
 from modules.pathutils import pageIdPattern, pathProcessor
 from modules.progressbar import mapReport
 from modules.statisticsutils import lineSplitter, outputStats, pagesFromStats
@@ -38,7 +38,7 @@ def overrideZip(src:str,dest:str,repDict:dict={},pageMap:str|None=None):
           repDict.pop(inDict,None)
         # copying non-changed files, saving the mimetype without compression
         else: outZip.writestr(inZipInfo.filename, inFile.read(),compress_type=zipfile.ZIP_STORED if inZipInfo.filename.lower() == 'mimetype' else zipfile.ZIP_DEFLATED)
-  print(f'succesfully saved {dest}')
+  print(f'Succesfully saved {dest}')
 
 
 def approximatePageLocationsByLine(stripped:str, pages:int, pageMode:str|int,offset=0):
@@ -83,7 +83,7 @@ def processRomans(roman:int|None,ranges:list[tuple[int,int,int]],frontRanges:lis
     lastKnownRoman = romanToInt(knownRomans[-1]) if len(knownRomans) != 0 else 0
     lastRomanLocation = getSingleLocation(lastKnownRoman,frontRanges)
     frontDef = floor(sum(calculatedSizes)/len(calculatedSizes)) if lastRomanLocation == 0 else floor(lastRomanLocation/lastKnownRoman)
-    roman = max(pagesFromStats(frontText,pageMode,frontDef) if roman == 0 else roman,lastKnownRoman) 
+    roman = max(pagesFromStats(frontText,pageMode,frontDef) if roman == 0 else roman,lastKnownRoman)
     if len(frontRanges) == 0: frontRanges = [(0,frontEnd,roman)]
     elif frontEnd-frontRanges[-1][1] != 0:
       sectionPages = pagesFromStats(frontText[frontRanges[-1][1]:],pageMode,frontDef)
@@ -101,12 +101,12 @@ def approximatePageLocationsByRanges(ranges:list[tuple[int,int,int]],frontRanges
 
   pageLocations:list[int] = []
   processedPages = 0
-  for [start,end,numPages] in ranges: 
+  for [start,end,numPages] in ranges:
     pageLocations = pageLocations + approximatePageLocations(stripText[start:end],numPages,breakMode,pageMode,start)
     processedPages = processedPages + numPages
   lastRange = ranges[-1] if len(ranges) != 0 else (0,0,0)
   pagesRemaining = pages - processedPages
-  if pagesRemaining != 0: 
+  if pagesRemaining != 0:
     pageLocations = pageLocations + approximatePageLocations(stripText[lastRange[1]:],pagesRemaining,breakMode,pageMode,lastRange[1])
   return (0,pageLocations)
 
@@ -167,7 +167,7 @@ def mapPages(pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:li
     realPage = romanize(i,roman,pageOffset)
     pgLinks.append(docs[docIndex].file_name if docLocation == 0 else f'{docs[docIndex].file_name}#{pageIdPattern(i)}' if realPage not in knownPages else knownPages[realPage])
     # no need to insert a break in that case either
-    if docLocation == 0: continue 
+    if docLocation == 0: continue
     # making our page breaker
     breakSpan:etree.ElementBase = doc.makeelement('span',None,None)
     breakSpan.set('id',f'pg_break_{i}')
@@ -188,20 +188,25 @@ def checkValidConstellations(suggest:bool,auto:bool,useToc:bool,tocMap:tuple[int
   return True
 
 
-def fillDict(changedDocs,docs,docStats):
+def fillDict(changedDocs:list[int],docs:list[EpubHtml],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]]]]):
   repDict = {}
   # adding all changed documents to our dictionary of changed files
-  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0]).decode('utf-8')
+  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0],method='html').decode('utf-8')
   return repDict
 
 
-def mappingWrapper(stripSplits:list[str],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]]]],docs:tuple[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int|str,str],pageOffset:int,pageLocations:list[int],adobeMap:bool,roman:int|None):
-  [pgLinks,changedDocs] = mapPages(
-    tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg)) 
-    for pg in pageLocations),stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,roman
-    )
-  adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset,roman)
-  return (pgLinks,changedDocs,adoMap)
+def mappingWrapper(stripSplits:list[str],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]]]],docs:tuple[EpubHtml],epub3Nav:EpubHtml,knownPages:dict[int|str,str],pageOffset:int,pageLocations:list[int],adobeMap:bool,roman:int|None,fromExisting:str=None,pageTag:str=None):
+  if fromExisting is None:
+    [pgLinks,changedDocs] = mapPages(
+      tuple((pg,next(y[0]-1 for y in enumerate(stripSplits) if y[1] > pg))
+      for pg in pageLocations),stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,roman
+      )
+    adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset,roman)
+    return (pgLinks,changedDocs,adoMap,[])
+  else:
+    [pgLinks,changedDocs,numList] = identifyPageNodes(docStats,docs,fromExisting,pageTag)
+    adoMap = None if adobeMap == False else makePgMap(pgLinks,0)
+    return (pgLinks,changedDocs,adoMap,numList)
 
 
 def getPagesAndRomans(pages:int|str,roman:str|int|None):
@@ -218,7 +223,7 @@ def sortDocuments(docs:tuple[EpubHtml],spine:list[tuple[str,bool]],nonlinear="ap
   return docs if len(spineIds) == 0 else tuple(sorted([x for x in docs if (unlisted != "ignore" or x.id in spineIds)],key= lambda d: spineIds.index(d.id) if d.id in spineIds else float('inf' if unlisted == 'append' else '-inf')))
 
 
-def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int|str]=tuple(),adobeMap=False,suggest=False,auto=False,roman:int|str|None=None,nonlinear="append",unlisted="ignore"):
+def processEPUB(path:str,pages:int|str,suffix:str=None,newPath:str=None,newName:str=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int|str]=tuple(),adobeMap=False,suggest=False,auto=False,roman:int|str|None=None,nonlinear="append",unlisted="ignore",pageTag:str=None):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   (pages,roman) = getPagesAndRomans(pages,roman)
   pub = read_epub(path)
@@ -240,15 +245,15 @@ def processEPUB(path:str,pages:int|str,suffix=None,newPath=None,newName=None,noN
   print('Starting pagination...')
   knownPages:dict[int|str,str] = {}
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
-  pageLocations:list[int]
-  if useToc:
+  pageLocations:list[int]=[]
+  if useToc and  type(pages) != str:
     if tocMap[0] == 0 and roman is None and next((x for x in tocMap if isinstance(x,str)),None) is None:
       pageOffset = 0
       pages = pages+1
     [frontRanges,contentRanges] = processToC(pub.toc,tocMap,knownPages,docs,stripSplits,docStats,pageOffset)
     [roman,pageLocations] = approximatePageLocationsByRanges(contentRanges,frontRanges,stripText,pages,breakMode,pageMode,roman,tocMap)
-  else: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode,0,roman)
-  [pgLinks,changedDocs,adoMap] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pageLocations,adobeMap,roman)
+  elif type(pages) != str: pageLocations = approximatePageLocations(stripText,pages,breakMode,pageMode,0,roman)
+  [pgLinks,changedDocs,adoMap,numList] = mappingWrapper(stripSplits,docStats,docs,epub3Nav,knownPages,pageOffset,pageLocations,adobeMap,roman,pages,pageTag)
   repDict = fillDict(changedDocs,docs,docStats)
   # finally, we save all our changed files into a new EPUB.
-  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset,roman):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict,adoMap)
+  if processNavigations(epub3Nav,ncxNav,pgLinks,repDict,noNav, noNcX,pageOffset,roman,numList):overrideZip(path,pathProcessor(path,newPath,newName,suffix),repDict,adoMap)
