@@ -3,8 +3,8 @@
 All notable changes to the EPUP Page Approximator will be documented here.
 
 ## [1.1.8]
-- yes
-- mp
+- Added the functionality to rebuild a valid page list from non-standard page markers in the ebook by passing a tag selector as the `pages` argument.
+- Added the `--attributes\-a` argument to select attribute values of detected page markers.
 - Fixed some bugs involving HTML decoding and zip file handling.
 - Guides moved to the new Wiki
 
