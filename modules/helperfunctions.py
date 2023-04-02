@@ -25,8 +25,23 @@ def romanToInt(s: str) -> int:
 
 def splitStr(s:str,n:int): return[s[i:i+n] for i in range(0, len(s), n)]
 
+def parseSelectors(selector:str)->tuple[str|None,str|None,str|None,str|None]:
+  parseMatch = search(r"^([A-z]+)?(?:\.(.+?))?(?:\[([^\]]+)\])?(?:#(.+))?$",selector)
+  if not parseMatch or len(parseMatch[0]) == 0: raise ValueError('invalid selector')
+  return tuple(parseMatch[x] for x in [1,2,3,4])
 
-def toInt(str:str|None): 
+def matchIdSelector(idSelector:str,id:str|None):
+  if id is None:return False
+  split = idSelector.split('*')
+  if len(split) == 1: return idSelector == id
+  if not ((id.startswith(split[0]) and id.endswith(split[-1]))): return False
+  lastMatch = 0
+  for s in split:
+    try: lastMatch = id[lastMatch:].index(s)
+    except: return False
+  return True
+
+def toInt(str:str|None):
   if not str: return str
   return str if search(r'^\d+$',str) is None else int(str)
 

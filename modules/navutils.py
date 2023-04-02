@@ -14,21 +14,21 @@ def prepareNavigations(pub:EpubBook):
   return (epub3Nav,ncxNav)
 
 
-def processNavigations(epub3Nav:EpubNav,ncxNav:EpubHtml,pgLinks:list[str],repDict:dict,noNav:bool, noNcX:bool,pageOffset=1,roman=0):
+def processNavigations(epub3Nav:EpubNav,ncxNav:EpubHtml,pgLinks:list[str],repDict:dict,noNav:bool, noNcX:bool,pageOffset=1,roman=0,numList:list[int|str] = []):
   """Adding the link list to any available navigation files."""
-  if epub3Nav and not noNav: 
-    if addLinksToNav(epub3Nav,pgLinks,repDict,pageOffset,roman) == False: return print('Pagination Cancelled') or False
-  if ncxNav and not noNcX: 
-     if addLinksToNcx(ncxNav,pgLinks,repDict,pageOffset,roman) == False :return print('Pagination Cancelled') or False
-  return True 
+  if epub3Nav and not noNav:
+    if addLinksToNav(epub3Nav,pgLinks,repDict,pageOffset,roman,numList) == False: return print('Pagination Cancelled') or False
+  if ncxNav and not noNcX:
+     if addLinksToNcx(ncxNav,pgLinks,repDict,pageOffset,roman,numList) == False :return print('Pagination Cancelled') or False
+  return True
 
 
-def makePgMap(linkList:list[str],pageOffset = 1,roman:int=0):
+def makePgMap(linkList:list[str],pageOffset = 1,roman:int=0,numList:list[int|str]=[]):
   pgMap:etree.ElementBase = etree.fromstring('<?xml version="1.0" ?><page-map xmlns="http://www.idpf.org/2007/opf"></page-map>')
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return pgMap.makeelement(name,attributes)
-  def makeTarget(number:int,offset=0):
+  def makeTarget(number:int,offset=0,replace=None):
     "Generates a pageTargets element containing a content tag with a link to the specified page number"
-    target = tag('page',{'id':f'pageNav_{number}', 'href':linkList[number], 'name':str(romanize(number,roman,offset))})
+    target = tag('page',{'id':f'pageNav_{number}', 'href':linkList[number], 'name':str(romanize(replace or number,roman,offset))})
     return target
-  for i in range(len(linkList)): pgMap.append(makeTarget(i,pageOffset))
+  for i in range(len(linkList)): pgMap.append(makeTarget(i,pageOffset if i >= len(numList) else  0,None if i >= len(numList) else numList[i]))
   return etree.tostring(pgMap).decode('utf-8')
