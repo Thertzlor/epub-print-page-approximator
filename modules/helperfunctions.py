@@ -38,7 +38,7 @@ def matchIdSelector(idSelector:str,id:str|None):
   lastMatch = 0
   for s in split:
     try: lastMatch = id[lastMatch:].index(s)
-    except: return False
+    except ValueError: return False
   return True
 
 def toInt(str:str|None):

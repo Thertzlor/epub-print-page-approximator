@@ -22,7 +22,9 @@ def flattenToc(b:list,links:list[str]=[]):
 
 def makeInt(s:str):
   try:return int(s)
-  except:return s
+  except ValueError:return s
+  
+def generateMapped(map:list,tocLen:int): return tuple(makeInt(next((s.split(':')[1] for s in map if type(s) == str and int(s.split(':')[0]) == i),0)) for i in range(tocLen))
 
 def preProcessTocMap(map:tuple[int|str],toc:list):
   hasSimple = next((True for x in map if type(x) == int or (type(x) == str and not ':' in x)),False)
@@ -40,7 +42,7 @@ def preProcessTocMap(map:tuple[int|str],toc:list):
   if not hasMapped:
     print('Chapter mapping in unknown format!')
     return False
-  return tuple(makeInt(next((s.split(':')[1] for s in map if type(s) == str and int(s.split(':')[0]) == i),0)) for i in range(tocLen))
+  return generateMapped(map,tocLen)
 
 def checkToC(toc:list,mapping:tuple[int|str]):
   """Check if the contents of our page mapping matches the actual table of contents in the book."""
