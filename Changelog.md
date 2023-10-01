@@ -2,6 +2,9 @@
 
 All notable changes to the EPUP Page Approximator will be documented here.
 
+## [1.1.9]
+- Added the option to provide the chapter map as key:value pairs instead of a simple list.
+
 ## [1.1.8]
 - Added the functionality to rebuild a valid page list from non-standard page markers in the ebook by passing a tag selector as the `pages` argument.
 - Added the `--attributes\-a` argument to select attribute values of detected page markers.
