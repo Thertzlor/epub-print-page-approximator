@@ -61,7 +61,7 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 
   genList = tag('pageList')
   genList.append(makeLabel('Pages'))
   # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
-  for i in range(len(linkList)): genList.append(makeTarget(i,pageOffset if i >= len(numList) else  0,None if i >= len(numList) else numList[i]))
+  for i in range(len(linkList)): genList.append(makeTarget(i,pageOffset if i >= len(numList) else 0,None if i >= len(numList) else numList[i]))
   doc.append(genList)
   # inserting the final text of our ncx file into our dictionary of changes.
   # also inserting line breaks for prettier formatting.
@@ -97,7 +97,7 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1,r
   mainNav.append(header)
   lst = tag('ol')
   # generating our links. Since the Ids are zero indexed, we provide an offset of 1 for the text.
-  for i in range(len(linkList)): lst.append(makeTarget(i,pageOffset if i >= len(numList) else  0,None if i >= len(numList) else numList[i]))
+  for i in range(len(linkList)): lst.append(makeTarget(i,pageOffset if i >= len(numList) else 0,None if i >= len(numList) else numList[i]))
   mainNav.append(lst)
   body.append(mainNav)
   # inserting the final text of our nav.xhtml file into our dictionary of changes.
@@ -223,7 +223,7 @@ def identifyPageNodes(docs:list[tuple[etree.ElementBase, list[tuple[etree.Elemen
           elPage = matchNo
         else:
           try: currentPage = int(elPage)
-          except: pass
+          except ValueError: pass
 
       if not e.get('id'):
         e.set('id',f'pg_{currentPage}')

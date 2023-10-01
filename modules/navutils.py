@@ -30,5 +30,5 @@ def makePgMap(linkList:list[str],pageOffset = 1,roman:int=0,numList:list[int|str
     "Generates a pageTargets element containing a content tag with a link to the specified page number"
     target = tag('page',{'id':f'pageNav_{number}', 'href':linkList[number], 'name':str(romanize(replace or number,roman,offset))})
     return target
-  for i in range(len(linkList)): pgMap.append(makeTarget(i,pageOffset if i >= len(numList) else  0,None if i >= len(numList) else numList[i]))
+  for i in range(len(linkList)): pgMap.append(makeTarget(i,pageOffset if i >= len(numList) else 0,None if i >= len(numList) else numList[i]))
   return etree.tostring(pgMap).decode('utf-8')
