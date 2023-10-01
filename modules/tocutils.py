@@ -20,6 +20,27 @@ def flattenToc(b:list,links:list[str]=[]):
     else: links.append(t.href)
   return links
 
+def makeInt(s:str):
+  try:return int(s)
+  except:return s
+
+def preProcessTocMap(map:tuple[int|str],toc:list):
+  hasSimple = next((True for x in map if type(x) == int or (type(x) == str and not ':' in x)),False)
+  hasMapped = next((True for x in map if (type(x) == str and ':' in x)),False)
+  if hasSimple and hasMapped:
+    print('The chapter map needs to consist either of simple values or index:value pairs, not both.')
+    return False
+  tocLen = len(flattenToc(toc))
+  if hasSimple:
+    if tocLen == len(map): return map
+    print('The manual chapter map must have the same number of entries as the Table of Contents of the ebook.\n The current ToC Data has the following entries:')
+    printToc(toc)
+    print('\nPlease adjust your list.')
+    return False
+  if not hasMapped:
+    print('Chapter mapping in unknown format!')
+    return False
+  return tuple(makeInt(next((s.split(':')[1] for s in map if type(s) == str and int(s.split(':')[0]) == i),0)) for i in range(tocLen))
 
 def checkToC(toc:list,mapping:tuple[int|str]):
   """Check if the contents of our page mapping matches the actual table of contents in the book."""

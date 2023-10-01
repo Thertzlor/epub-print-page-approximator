@@ -10,7 +10,7 @@ from modules.nodeutils import addPageMapRefs, getBookContent, insertAtPosition,i
 from modules.pathutils import pageIdPattern, pathProcessor
 from modules.progressbar import mapReport
 from modules.statisticsutils import lineSplitter, outputStats, pagesFromStats
-from modules.tocutils import checkToC, processToC
+from modules.tocutils import processToC, preProcessTocMap
 
 calculatedSizes:list[int|float]= []
 
@@ -182,12 +182,6 @@ def mapPages(pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:li
   return [pgLinks,changedDocs]
 
 
-def checkValidConstellations(suggest:bool,auto:bool,useToc:bool,tocMap:tuple[int|str],toc:list):
-  if suggest and auto == False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
-  if useToc and checkToC(toc,tocMap) == False: return
-  return True
-
-
 def fillDict(changedDocs:list[int],docs:list[EpubHtml],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]]]]):
   repDict = {}
   # adding all changed documents to our dictionary of changed files
@@ -226,10 +220,13 @@ def sortDocuments(docs:tuple[EpubHtml],spine:list[tuple[str,bool]],nonlinear="ap
 
 def processEPUB(path:str,pages:int|str,suffix:str=None,newPath:str=None,newName:str=None,noNav=False, noNcX = False,breakMode='next',pageMode:str|int='chars',tocMap:tuple[int|str]=tuple(),adobeMap=False,suggest=False,auto=False,roman:int|str|None=None,nonlinear="append",unlisted="ignore",pageTag:str=None):
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
+  if suggest and auto == False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
   (pages,roman) = getPagesAndRomans(pages,roman)
   pub = read_epub(path)
   useToc = len(tocMap) != 0
-  if not checkValidConstellations(suggest,auto,useToc,tocMap,pub.toc): return
+  if useToc: 
+    tocMap = preProcessTocMap(tocMap,pub.toc)
+    if not tocMap: return
   [epub3Nav,ncxNav] = prepareNavigations(pub)
   # getting all documents that are not the internal EPUB3 navigation.
   docs = sortDocuments(tuple(x for x in pub.get_items_of_type(ITEM_DOCUMENT) if isinstance(x,EpubHtml)),pub.spine,nonlinear,unlisted)
@@ -248,7 +245,7 @@ def processEPUB(path:str,pages:int|str,suffix:str=None,newPath:str=None,newName:
   knownPages:dict[int|str,str] = {}
   # figuring out where the pages are located, and mapping those locations back onto the individual documents.
   pageLocations:list[int]=[]
-  if useToc and  not buildFromTags:
+  if useToc and not buildFromTags:
     if tocMap[0] == 0 and roman is None and next((x for x in tocMap if isinstance(x,str)),None) is None:
       pageOffset = 0
       pages = pages+1
