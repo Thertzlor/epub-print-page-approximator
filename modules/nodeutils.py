@@ -71,7 +71,7 @@ def addLinksToNcx(ncx:EpubHtml,linkList:list[str],repDict:dict={}, pageOffset = 
 
 def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1,roman=0,numList:list[int|str]=[]):
   """Function to populate a EPUB3 Nav.xhtml file with our new list of pages."""
-  doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser())
+  doc:etree.ElementBase = etree.fromstring(nav.content,etree.HTMLParser(encoding='utf8'))
   # function for generating elements, mostly used to get proper autocomplete
   def tag(name:str,attributes:dict=None)->etree.ElementBase: return doc.makeelement(name,attributes)
   def makeTarget(number:int,offset=0,replace=None):
@@ -245,7 +245,7 @@ def getBookContent(docs:list[EpubHtml]):
   numDocs=len(docs)
   htmStrings:list[str] = tuple(x.content for x in docs)
   # getting all documents.
-  htmDocs: list[etree.ElementBase] = tuple(etree.fromstring(x,etree.HTMLParser()) for x in htmStrings)
+  htmDocs: list[etree.ElementBase] = tuple(etree.fromstring(x,etree.HTMLParser(encoding='utf8')) for x in htmStrings)
   # extracting all text.
   stripStrings:list[str] = [nodeText(x) for x in htmDocs]
   htmRanges = tuple(nodeRanges(x,stripStrings[i]) for (i,x) in enumerate(htmDocs) if mapReport(i+1,numDocs,'Parsing HTML'))
