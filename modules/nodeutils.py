@@ -82,7 +82,7 @@ def addLinksToNav(nav:EpubHtml,linkList:list[str],repDict:dict={},pageOffset=1,r
     target.append(link)
     return target
 
-  body:etree.ElementBase = doc.find('x:body',xns)
+  body: etree.ElementBase = doc.find('x:body', xns) or doc.find('body')
   # perhaps the file already has a page-list navigation element
   oldNav:etree.ElementBase = next((x for x in body.findall('x:nav',xns) if x.get('epub:type') == 'page-list'),None)
   if(oldNav is not None):
