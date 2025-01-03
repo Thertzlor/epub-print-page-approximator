@@ -3,9 +3,9 @@
 All notable changes to the EPUP Page Approximator will be documented here.
 
 ## [1.2.0]
-- Fixed a bug that sometimes caused a crash when insterting page lists into an existing Epub3 Navigation.
+- Fixed a bug that sometimes caused a crash when inserting page lists into an existing Epub3 Navigation.
 - Updated dependencies
-- Removed unneccesary warnings
+- Removed unnecessary warnings
 
 ## [1.1.9]
 - Added the option to provide the chapter map as key:value pairs instead of a simple list.
