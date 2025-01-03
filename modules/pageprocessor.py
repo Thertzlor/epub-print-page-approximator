@@ -12,6 +12,10 @@ from modules.progressbar import mapReport
 from modules.statisticsutils import lineSplitter, outputStats, pagesFromStats
 from modules.tocutils import processToC, preProcessTocMap
 
+import warnings
+warnings.filterwarnings("ignore",category=FutureWarning)
+warnings.filterwarnings("ignore",category=UserWarning)
+
 calculatedSizes:list[int|float]= []
 
 def overrideZip(src:str,dest:str,repDict:dict={},pageMap:str|None=None):
@@ -222,7 +226,7 @@ def processEPUB(path:str,pages:int|str,suffix:str=None,newPath:str=None,newName:
   """The main function of the script. Receives all command line arguments and delegates everything to the other functions."""
   if suggest and auto == False: raise ValueError('The --suggest flag can only be used if the --auto Flag is also set.')
   (pages,roman) = getPagesAndRomans(pages,roman)
-  pub = read_epub(path)
+  pub = read_epub(path,{"ignore_ncx":False})
   useToc = len(tocMap) != 0
   if useToc: 
     tocMap = preProcessTocMap(tocMap,pub.toc)
