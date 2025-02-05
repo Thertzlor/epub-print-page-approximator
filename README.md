@@ -1,4 +1,4 @@
-![version](https://img.shields.io/badge/version-1.2.0-blue)
+![version](https://img.shields.io/badge/version-1.2.1-blue)
 [![CodeFactor](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/badge/main)](https://www.codefactor.io/repository/github/thertzlor/epub-print-page-approximator/overview/main)
 ![license](https://img.shields.io/github/license/Thertzlor/epub-print-page-approximator)
 # Print Page Approximator for EPUB and EPUB3
