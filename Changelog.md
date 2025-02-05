@@ -2,6 +2,9 @@
 
 All notable changes to the EPUP Page Approximator will be documented here.
 
+## [1.2.1]
+- Switched to encoding output files in xml mode instead of html to fix generating self closing HTML tags without closing slashes, which could cause rendering issues.
+
 ## [1.2.0]
 - Fixed a bug that sometimes caused a crash when inserting page lists into an existing Epub3 Navigation.
 - Updated dependencies
