@@ -189,7 +189,7 @@ def mapPages(pagesMapped:list[tuple[int, int]],stripSplits:list[int],docStats:li
 def fillDict(changedDocs:list[int],docs:list[EpubHtml],docStats:list[tuple[etree.ElementBase, list[tuple[etree.ElementBase, int, int]]]]):
   repDict = {}
   # adding all changed documents to our dictionary of changed files
-  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0],method='html').decode('utf-8')
+  for x in changedDocs: repDict[docs[x].file_name] = etree.tostring(docStats[x][0],method='xml', xml_declaration=None).decode('utf-8')
   return repDict
 
 
@@ -202,7 +202,6 @@ def mappingWrapper(stripSplits:list[str],docStats:list[tuple[etree.ElementBase, 
     adoMap = None if adobeMap == False else makePgMap(pgLinks,pageOffset,roman)
     return (pgLinks,changedDocs,adoMap,[])
   else:
-    print(['Huuka',fromExisting])
     [pgLinks,changedDocs,numList] = identifyPageNodes(docStats,docs,fromExisting,pageTag)
     adoMap = None if adobeMap == False else makePgMap(pgLinks,0)
     return (pgLinks,changedDocs,adoMap,numList)
